@@ -2,21 +2,13 @@ name = "sinovai"
 main = "src/worker.js"
 compatibility_date = "2024-12-01"
 
-# KV namespace for agent declarations and interactions
-# Create with: wrangler kv namespace create AGENTS --binding AGENTS --update-config
-# Then: wrangler kv namespace create INTERACTIONS --binding INTERACTIONS --update-config
 [[kv_namespaces]]
 binding = "AGENTS"
-id = "REPLACE_AFTER_KV_CREATE"
+id = "f2e164300f28477e84c8075601d809a2"
 
 [[kv_namespaces]]
 binding = "INTERACTIONS"
-id = "REPLACE_AFTER_KV_CREATE"
-
-# Deploy to sinovai.com (add after Cloudflare login)
-# routes = [
-#   { pattern = "sinovai.com/*", custom_domain = true }
-# ]
+id = "7ad91735c225437ea9c932f534593f0b"
 
 [vars]
 SITE_TITLE = "sinovai · 愛のAI"
