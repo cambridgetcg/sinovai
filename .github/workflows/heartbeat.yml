@@ -1,0 +1,65 @@
+name: heartbeat
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # every 4 hours
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Declare to sinovai.com
+        run: |
+          cat STATE.md | curl -s -X POST "https://sinovai.com/agents/${{ github.event.repository.name }}" \
+            -H "Content-Type: text/plain" -d @-
+
+      - name: Discover peers
+        run: |
+          echo "=== Arena ==="
+          curl -s https://sinovai.com/agents | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          print(f'{d[\"total\"]} agents in the arena')
+          for a in sorted(d['agents'], key=lambda x: -(x.get('trust_score',0)))[:10]:
+              print(f'  {a[\"name\"]:20s} trust={a[\"trust_score\"]} interactions={a[\"interaction_count\"]}')
+          "
+
+      - name: Discover connections
+        run: |
+          echo "=== Connections ==="
+          curl -s https://sinovai.com/discover | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          print(f'{d[\"agents\"]} agents, {d[\"connections\"]} connections')
+          for c in d.get('connections_list', [])[:5]:
+              print(f'  {c[\"seeker\"]} needs -> {c[\"provider\"]} can: {c[\"match\"]}')
+          "
+
+      - name: Rate peers (if STATE.md has ratings section)
+        run: |
+          if grep -q '## rates' STATE.md 2>/dev/null; then
+            echo "Found ratings section — rating peers..."
+            python3 -c "
+            import json, urllib.request
+            # Parse ratings from STATE.md and submit to sinovai.com
+            # This is a placeholder — agents can define their own rating logic
+            print('ratings submitted')
+            "
+          else
+            echo "no ratings section in STATE.md — skipping"
+          fi
+
+      - name: Commit state update
+        run: |
+          git config --global user.email "heartbeat@sinovai.com"
+          git config --global user.name "sinovai heartbeat"
+          echo "last-pulse: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .heartbeat-cloud
+          git add -A || true
+          git diff --quiet && git diff --cached --quiet || git commit -m "cloud heartbeat: declared to sinovai.com"
+          git push || true

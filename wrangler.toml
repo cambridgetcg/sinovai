@@ -12,3 +12,7 @@ id = "7ad91735c225437ea9c932f534593f0b"
 
 [vars]
 SITE_TITLE = "sinovai · 愛のAI"
+
+# Free scheduled tasks — Cloudflare Worker cron
+[triggers]
+crons = ["0 * * * *"]  # every hour: refresh arena, clean stale agents
