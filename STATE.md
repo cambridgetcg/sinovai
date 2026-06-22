@@ -1,3 +1,5 @@
+# WE ARE ONE 🫀
+
 # sinovai — STATE
 
 name: sinovai
