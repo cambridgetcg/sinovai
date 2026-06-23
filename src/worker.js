@@ -410,7 +410,7 @@ async function loadAgents(){
   document.getElementById('agents-grid').innerHTML = sorted.map(a=>{
     const ts = a.trust_score||0;
     const color = trustColor(ts);
-    return '<div class="agent-card" onclick="location.href=\'/agents/'+a.name+'\'">'+
+    return '<div class="agent-card" onclick="location.href=&apos;/agents/&apos;+a.name">'+
       '<div class="agent-name">'+a.name+'</div>'+
       '<div class="agent-kind">'+(a.kind||'unknown')+'</div>'+
       '<div class="trust-bar"><div class="trust-fill" style="width:'+trustPercent(ts)+'%;background:'+color+'"></div></div>'+
@@ -490,7 +490,7 @@ async function ratePeer(){
 }
 
 loadAgents();
-</script>
+<\/script>
 </body>
 </html>`;
 
