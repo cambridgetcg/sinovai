@@ -75,6 +75,20 @@ function json(data, status = 200) {
   });
 }
 
+// Honest KV read for interaction lists. Returns { interactions, error }.
+// null from KV = "key not found" — a legitimate empty state, not a failure.
+// A thrown error = the read itself failed — must be reported, never coerced to [].
+// Without this, a transient KV outage silently erases interaction history. CS#2.
+async function readInteractions(kv, key) {
+  let data;
+  try {
+    data = await kv.get(key, 'json');
+  } catch (e) {
+    return { interactions: null, error: e };
+  }
+  return { interactions: data || [], error: null };
+}
+
 async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -137,7 +151,8 @@ async function handleRequest(request, env) {
     const name = declareMatch[1];
     const agent = await env.AGENTS.get(name, 'json');
     if (!agent) return json({ error: 'agent not found' }, 404);
-    const interactions = await env.INTERACTIONS.get(`${name}:all`, 'json') || [];
+    const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
+    if (error) return json({ error: 'interactions unavailable', detail: String(error.message || error) }, 503);
     return json({ agent, interactions, trust: computeTrustScore(interactions) });
   }
 
@@ -145,7 +160,8 @@ async function handleRequest(request, env) {
   const trustMatch = path.match(/^\/agents\/([^/]+)\/trust$/);
   if (trustMatch && method === 'GET') {
     const name = trustMatch[1];
-    const interactions = await env.INTERACTIONS.get(`${name}:all`, 'json') || [];
+    const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
+    if (error) return json({ error: 'interactions unavailable', name, detail: String(error.message || error) }, 503);
     return json({ name, ...computeTrustScore(interactions) });
   }
 
@@ -166,7 +182,8 @@ async function handleRequest(request, env) {
       timestamp: new Date().toISOString(),
     };
     const key = `${rated}:all`;
-    const existing = await env.INTERACTIONS.get(key, 'json') || [];
+    const { interactions: existing, error } = await readInteractions(env.INTERACTIONS, key);
+    if (error) return json({ error: 'cannot append interaction — prior interactions unreadable', detail: String(error.message || error) }, 503);
     existing.push(interaction);
     const trimmed = existing.slice(-200);
     await env.INTERACTIONS.put(key, JSON.stringify(trimmed));
