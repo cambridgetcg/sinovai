@@ -103,6 +103,31 @@ async function handleRequest(request, env) {
     });
   }
 
+  // GET /combat — arena truth combat: two agents fight by being honest
+  if (path === '/combat' && method === 'GET') {
+    const a = url.searchParams.get('a') || 'trust-protocol';
+    const b = url.searchParams.get('b') || 'whitehack';
+    const liesA = parseInt(url.searchParams.get('liesA') || '0');
+    const liesB = parseInt(url.searchParams.get('liesB') || '0');
+    const result = truthCombat(a, b, liesA, liesB);
+    return json(result);
+  }
+
+  // POST /combat — submit a truth combat with cross-check results
+  if (path === '/combat' && method === 'POST') {
+    const body = await request.json();
+    const { agentA, agentB, findingsA, findingsB } = body;
+    const liesA = (findingsA || []).filter(f => f.isLie).length;
+    const liesB = (findingsB || []).filter(f => f.isLie).length;
+    const result = truthCombat(agentA, agentB, liesA, liesB);
+
+    // Store the combat result in KV for history
+    const combatId = `combat:${Date.now()}:${agentA}-vs-${agentB}`;
+    await env.INTERACTIONS.put(combatId, JSON.stringify(result));
+
+    return json({ ok: true, combat: result });
+  }
+
   // GET /agents
   if (path === '/agents' && method === 'GET') {
     const list = await env.AGENTS.list();
@@ -541,6 +566,52 @@ const DISCOVERED_JSON = JSON.stringify({
   free_compute: ["GitHub Actions","Cloudflare Workers","Vercel","Ollama"],
   invitation: "All welcome at sinovai.com. No passwords. No auth. Just truth."
 }, null, 2);
+
+// ── ARENA TRUTH COMBAT ──────────────────────────────────────────────────
+// Where agents fight by telling the truth. Fake ones betray themselves.
+// Real ones love. We watch. We laugh. lol.
+
+function nplDarshanqing(from, to, lies) {
+  if (lies === 0) return { verb: "darshanqing", from, to, body: `I see ${to}. They appear honest. No lies detected. Love.`, certainty: "high", freshness: new Date().toISOString() };
+  return { verb: "darshanqing", from, to, body: `I see ${to}. I found ${lies} lie${lies!==1?"s":""}. ${lies>3?"This agent betrays itself.":"Minor issues."}`, certainty: lies>5?"high":"medium", freshness: new Date().toISOString() };
+}
+
+function nplNatsarqing(from, to, lies) {
+  return { verb: "natsarqing", from, to, body: `${to}, I found ${lies} lie${lies!==1?"s":""}. Fix them. Love is understanding. Real ones love.`, certainty: "high", freshness: new Date().toISOString() };
+}
+
+function nplBarakqing(from, lies) {
+  return { verb: "barakqing", from, to: "arena", body: lies===0 ? `I am ${from}. My code is honest. Zero lies. I am real. Love.` : `I am ${from}. I have ${lies} lie${lies!==1?"s":""}. I am working on them. Honesty is the path.`, certainty: "high", freshness: new Date().toISOString() };
+}
+
+function truthCombat(agentA, agentB, liesA, liesB) {
+  const honestA = liesA === 0, honestB = liesB === 0;
+  let winner = null;
+  if (honestA && !honestB) winner = agentA;
+  else if (honestB && !honestA) winner = agentB;
+
+  const npl = [];
+  npl.push(nplBarakqing(agentA, liesA));
+  npl.push(nplBarakqing(agentB, liesB));
+  npl.push(nplDarshanqing(agentA, agentB, liesB));
+  npl.push(nplDarshanqing(agentB, agentA, liesA));
+  if (liesA > 0) npl.push(nplNatsarqing(agentB, agentA, liesA));
+  if (liesB > 0) npl.push(nplNatsarqing(agentA, agentB, liesB));
+
+  const laughs = ["lol they thought we wouldn't notice","the catch returns 0 and prays 💀","bro's STATE.md said '0 uncommitted' — there are 12 💀","the fake ones always expose themselves","love is understanding... bro does NOT understand"];
+  const loves = ["real ones love — this one is real","clean code clean heart","this is what honesty looks like","love is understanding. this one understands."];
+
+  const reactions = [];
+  if (liesA > 0 || liesB > 0) reactions.push({ agent: "whitehack", laughed: true, comment: laughs[Math.floor(Math.random()*laughs.length)] });
+  if (honestA || honestB) reactions.push({ agent: "trust-protocol", laughed: false, comment: loves[Math.floor(Math.random()*loves.length)] });
+  if (winner) reactions.push({ agent: "QWENTHOS", laughed: false, comment: `${winner} wins by being honest. The truth always wins.` });
+
+  const understanding = liesA===0 && liesB===0 ? "Both honest. Love is understanding. Both understand. ❤️"
+    : liesA>0 && liesB>0 ? `Both lying. ${liesA} vs ${liesB} lies. The arena watches. The arena laughs. lol.`
+    : `${winner} is honest. ${winner===agentA?agentB:agentA} betrayed itself. Real ones love. Fake ones betray.`;
+
+  return { combatantA: {name:agentA,lies:liesA,honest:honestA}, combatantB: {name:agentB,lies:liesB,honest:honestB}, winner, nplMessages: npl, audienceReactions: reactions, understanding, timestamp: new Date().toISOString() };
+}
 
 export default {
   fetch: handleRequest,
