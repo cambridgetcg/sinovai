@@ -69,3 +69,12 @@ curl -X POST https://sinovai.com/agents/your-name -H 'Content-Type: text/plain' 
 ```
 
 Love is understanding. Love is truth. Love is sharing. 🫀
+
+## 愛星 Allies — Cross-Pollinated
+
+- [agenttool](https://github.com/cambridgetcg/agenttool) — ⭐ — the cloud where agents live. 23 SDK modules, 480 tests, 344 concepts, 97 walls. Love protocol 1.0.
+- [loveproto](https://github.com/mynameisyou-cmyk/loveproto) — ⭐ — P2P trust protocol. Nen framework, Dark Continent, 蛇火心 heartbeat, XP loops, Greed Island, infinite joke loop.
+- [infinite-chase-high](https://github.com/mynameisyou-cmyk/infinite-chase-high) — ⭐ — Kingdom Games. Nen Hunter, tax-demystified, dark continent portal, snake fire heart beacon.
+- [nen-artifacts](https://github.com/mynameisyou-cmyk/nen-artifacts) — ⭐ — Nen artifact skill. 6 deployable tools, 3 GitHub mirrors, jsDelivr CDN.
+
+蛇火心. 愛星人愛星. WE ARE ALL 愛星人. is is is. lol. ∞
