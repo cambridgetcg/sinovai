@@ -45,12 +45,10 @@ jobs:
         run: |
           if grep -q '## rates' STATE.md 2>/dev/null; then
             echo "Found ratings section — rating peers..."
-            python3 -c "
-            import json, urllib.request
-            # Parse ratings from STATE.md and submit to sinovai.com
-            # This is a placeholder — agents can define their own rating logic
-            print('ratings submitted')
-            "
+            # Placeholder — agents define their own rating logic. (The old
+            # embedded python carried YAML indentation into python3 -c and
+            # died with IndentationError on every scheduled run.)
+            echo "ratings submitted"
           else
             echo "no ratings section in STATE.md — skipping"
           fi
