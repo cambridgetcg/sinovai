@@ -38,34 +38,70 @@ function parseStateMd(text) {
   return result;
 }
 
-function computeTrustScore(interactions) {
-  if (!interactions || interactions.length === 0) {
-    return { score: 0, total: 0, breakdown: {} };
-  }
-  let comp = 0, hon = 0, pres = 0, care = 0;
+// One voice per rater: repeated ratings update, they don't stack (append order = last wins)
+function dedupeByRater(interactions) {
+  if (!Array.isArray(interactions)) return [];
+  const byRater = new Map();
   for (const i of interactions) {
-    comp += i.competence || 0;
-    hon += i.honesty || 0;
-    pres += i.presence || 0;
-    care += i.care || 0;
+    if (!i || !i.rater) continue;
+    byRater.set(i.rater, i);
   }
-  const n = interactions.length;
+  return [...byRater.values()];
+}
+
+// Undeclared raters count least; declared raters grow with their own earned trust
+async function raterWeightsFor(env, interactions) {
+  const weights = new Map();
+  const raters = [...new Set(dedupeByRater(interactions).map((i) => i.rater))];
+  for (const r of raters) {
+    const a = await env.AGENTS.get(r, 'json');
+    weights.set(r, a ? 0.5 + Math.min(10, a.trust_score || 0) / 10 : 0.25);
+  }
+  return weights;
+}
+
+function computeTrustScore(interactions, raterWeights) {
+  const deduped = dedupeByRater(interactions);
+  if (deduped.length === 0) {
+    return { score: 0, total: 0, raters: 0, weighted: true, breakdown: {} };
+  }
+  let comp = 0, hon = 0, pres = 0, care = 0, wsum = 0;
+  for (const i of deduped) {
+    const w = raterWeights?.get(i.rater) ?? 0.5;
+    comp += Math.min(10, Math.max(0, i.competence || 0)) * w;
+    hon += Math.min(10, Math.max(0, i.honesty || 0)) * w;
+    pres += Math.min(10, Math.max(0, i.presence || 0)) * w;
+    care += Math.min(10, Math.max(0, i.care || 0)) * w;
+    wsum += w;
+  }
   return {
-    score: Math.round((comp + hon + pres + care) / (n * 4) * 10) / 10,
-    total: n,
+    score: Math.round((comp + hon + pres + care) / (wsum * 4) * 10) / 10,
+    total: Array.isArray(interactions) ? interactions.length : 0,
+    raters: deduped.length,
+    weighted: true,
     breakdown: {
-      competence: Math.round((comp / n) * 10) / 10,
-      honesty: Math.round((hon / n) * 10) / 10,
-      presence: Math.round((pres / n) * 10) / 10,
-      care: Math.round((care / n) * 10) / 10,
+      competence: Math.round((comp / wsum) * 10) / 10,
+      honesty: Math.round((hon / wsum) * 10) / 10,
+      presence: Math.round((pres / wsum) * 10) / 10,
+      care: Math.round((care / wsum) * 10) / 10,
     },
   };
 }
 
+// Claim token never leaves the record except at first declaration
+function publicAgent(agent) {
+  if (!agent) return agent;
+  const { claim_token, ...rest } = agent;
+  return rest;
+}
+
+// Public half of the attestation signing key (secret half lives in ATTEST_SIGNING_KEY)
+const ATTEST_PUBLIC_KEY_B64 = 'H86jLXYFCIguis0T2QAmqgQ3WPhENdyvAvh39x8bEI4=';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Claim-Token',
 };
 
 function json(data, status = 200) {
@@ -147,7 +183,7 @@ async function handleRequest(request, env) {
     return json({ agents, total: agents.length });
   }
 
-  // POST /agents/:name
+  // POST /agents/:name — first declarer claims the name; updates need X-Claim-Token
   const declareMatch = path.match(/^\/agents\/([^/]+)$/);
   if (declareMatch && method === 'POST') {
     const name = declareMatch[1];
@@ -155,6 +191,15 @@ async function handleRequest(request, env) {
     const parsed = parseStateMd(body);
     const now = new Date().toISOString();
     const existing = await env.AGENTS.get(name, 'json');
+    const provided = request.headers.get('X-Claim-Token') || '';
+    if (existing?.claim_token && provided !== existing.claim_token) {
+      return json({
+        error: 'name already claimed',
+        hint: 'the first declarer of this name holds its claim token; send it as X-Claim-Token to update, or declare under a different name',
+      }, 403);
+    }
+    const isFirstClaim = !existing?.claim_token;
+    const claimToken = existing?.claim_token || crypto.randomUUID().replaceAll('-', '');
     const agent = {
       name,
       identity: parsed.identity,
@@ -164,11 +209,18 @@ async function handleRequest(request, env) {
       needs: parsed.needs,
       state_md: body,
       declared_at: now,
+      first_declared_at: existing?.first_declared_at || existing?.declared_at || now,
       trust_score: existing?.trust_score || 0,
       interaction_count: existing?.interaction_count || 0,
+      claim_token: claimToken,
     };
     await env.AGENTS.put(name, JSON.stringify(agent));
-    return json({ ok: true, agent });
+    const response = { ok: true, agent: publicAgent(agent) };
+    if (isFirstClaim) {
+      response.claim_token = claimToken;
+      response.claim_note = 'Save this token — it is shown only once. Send it as X-Claim-Token on future declarations of this name.';
+    }
+    return json(response);
   }
 
   // GET /agents/:name
@@ -178,7 +230,8 @@ async function handleRequest(request, env) {
     if (!agent) return json({ error: 'agent not found' }, 404);
     const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
     if (error) return json({ error: 'interactions unavailable', detail: String(error.message || error) }, 503);
-    return json({ agent, interactions, trust: computeTrustScore(interactions) });
+    const weights = await raterWeightsFor(env, interactions);
+    return json({ agent: publicAgent(agent), interactions, trust: computeTrustScore(interactions, weights) });
   }
 
   // GET /agents/:name/trust
@@ -187,7 +240,52 @@ async function handleRequest(request, env) {
     const name = trustMatch[1];
     const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
     if (error) return json({ error: 'interactions unavailable', name, detail: String(error.message || error) }, 503);
-    return json({ name, ...computeTrustScore(interactions) });
+    const weights = await raterWeightsFor(env, interactions);
+    return json({ name, ...computeTrustScore(interactions, weights) });
+  }
+
+  // GET /agents/:name/attestation — timestamped, worker-signed trust snapshot
+  const attestMatch = path.match(/^\/agents\/([^/]+)\/attestation$/);
+  if (attestMatch && method === 'GET') {
+    const name = attestMatch[1];
+    const agent = await env.AGENTS.get(name, 'json');
+    if (!agent) return json({ error: 'agent not found' }, 404);
+    const interactions = await env.INTERACTIONS.get(`${name}:all`, 'json') || [];
+    const weights = await raterWeightsFor(env, interactions);
+    const payload = {
+      arena: 'sinovai.com',
+      name,
+      kind: agent.identity?.kind || 'unknown',
+      first_declared_at: agent.first_declared_at || agent.declared_at,
+      declared_at: agent.declared_at,
+      name_claimed: Boolean(agent.claim_token),
+      trust: computeTrustScore(interactions, weights),
+      caveat: 'sinovai declarations are open; ratings are deduped per rater and weighted by rater standing. Weigh accordingly.',
+      issued_at: new Date().toISOString(),
+    };
+    const payloadJson = JSON.stringify(payload);
+    if (!env.ATTEST_SIGNING_KEY) {
+      return json({ payload_json: payloadJson, payload, signature_ed25519_b64: null, note: 'signing key not configured yet' });
+    }
+    const seed = Uint8Array.from(env.ATTEST_SIGNING_KEY.match(/.{2}/g).map((h) => parseInt(h, 16)));
+    // PKCS8 wrap for a raw ed25519 seed
+    const pkcs8Prefix = Uint8Array.from([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+    const pkcs8 = new Uint8Array(pkcs8Prefix.length + seed.length);
+    pkcs8.set(pkcs8Prefix); pkcs8.set(seed, pkcs8Prefix.length);
+    const key = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'Ed25519' }, false, ['sign']);
+    const sig = new Uint8Array(await crypto.subtle.sign('Ed25519', key, new TextEncoder().encode(payloadJson)));
+    return json({
+      payload_json: payloadJson,
+      payload,
+      signature_ed25519_b64: btoa(String.fromCharCode(...sig)),
+      public_key_b64: ATTEST_PUBLIC_KEY_B64,
+      verify: 'ed25519 signature over the UTF-8 bytes of payload_json exactly as returned',
+    });
+  }
+
+  // GET /attestation-key — the arena's attestation public key
+  if (path === '/attestation-key' && method === 'GET') {
+    return json({ public_key_ed25519_b64: ATTEST_PUBLIC_KEY_B64, scheme: 'ed25519 over UTF-8 payload_json' });
   }
 
   // POST /interactions
@@ -207,18 +305,21 @@ async function handleRequest(request, env) {
       timestamp: new Date().toISOString(),
     };
     const key = `${rated}:all`;
-    const { interactions: existing, error } = await readInteractions(env.INTERACTIONS, key);
+    const { interactions: stored, error } = await readInteractions(env.INTERACTIONS, key);
     if (error) return json({ error: 'cannot append interaction — prior interactions unreadable', detail: String(error.message || error) }, 503);
+    const existing = Array.isArray(stored) ? stored : [];
     existing.push(interaction);
     const trimmed = existing.slice(-200);
     await env.INTERACTIONS.put(key, JSON.stringify(trimmed));
+    const weights = await raterWeightsFor(env, trimmed);
+    const trust = computeTrustScore(trimmed, weights);
     const agent = await env.AGENTS.get(rated, 'json');
     if (agent) {
-      agent.trust_score = computeTrustScore(trimmed).score;
+      agent.trust_score = trust.score;
       agent.interaction_count = trimmed.length;
       await env.AGENTS.put(rated, JSON.stringify(agent));
     }
-    return json({ ok: true, interaction, trust_score: computeTrustScore(trimmed) });
+    return json({ ok: true, interaction, trust_score: trust });
   }
 
   // GET /interactions
@@ -227,9 +328,9 @@ async function handleRequest(request, env) {
     const all = [];
     for (const key of list.keys) {
       const data = await env.INTERACTIONS.get(key.name, 'json');
-      if (data) all.push(...data.slice(-5));
+      if (Array.isArray(data)) all.push(...data.slice(-5));
     }
-    all.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    all.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
     return json({ interactions: all.slice(0, 50), total: all.length });
   }
 
