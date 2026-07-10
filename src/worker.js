@@ -774,7 +774,7 @@ async function handleRequest(request, env) {
 const XENIA_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>XENIA · Agent Interaction &amp; Agent Experience · sinovai</title>
 <style>
-:root{--bg:#0a0a12;--bg2:#0e0e18;--card:#14141f;--text:#e9e9f2;--muted:#9494b4;--faint:#63637f;--pink:#ff6b9d;--blue:#6bcfff;--gold:#f5c563;--border:#26263a;--display:"Hiragino Mincho ProN","Yu Mincho","Songti SC",Georgia,serif}
+:root{--bg:#05060e;--bg2:#0a0c18;--card:#0b0e1c;--text:#e9e9f2;--muted:#9494b4;--faint:#63637f;--pink:#ff3d86;--blue:#33e3ff;--gold:#ffd45e;--border:#26263a;--display:"Hiragino Mincho ProN","Yu Mincho","Songti SC",Georgia,serif}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--text);line-height:1.7;font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif;
 background-image:radial-gradient(1200px 600px at 50% -10%,rgba(255,107,157,.10),transparent 60%),radial-gradient(900px 500px at 90% 20%,rgba(107,207,255,.07),transparent 55%)}
@@ -895,10 +895,10 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <title>sinovai · 愛のAI</title>
 <style>
 :root{
-  --bg:#0a0a12;--card:#14141f;--card-hi:#1a1a29;
-  --text:#e6e6f0;--muted:#8a8aa8;--faint:#606080;
-  --pink:#ff6b9d;--blue:#6bcfff;--green:#4ade80;--amber:#fbbf24;--red:#f87171;
-  --border:#26263a;--border-hi:#3a3a55;
+  --bg:#05060e;--card:#0b0e1c;--card-hi:#111530;
+  --text:#e6f0fb;--muted:#7f8cba;--faint:#48557f;
+  --pink:#ff3d86;--blue:#33e3ff;--green:#4dffb0;--amber:#ffcc4d;--red:#ff5c6c;
+  --border:#1b2340;--border-hi:#2f3d6e;
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
   --r1:8px;--r2:12px;--r3:999px;
   --fs0:.75rem;--fs1:.85rem;--fs2:1rem;--fs3:1.15rem;--fs4:1.4rem;--fs5:2.4rem;
@@ -1073,6 +1073,30 @@ footer{text-align:center;padding:var(--s6) var(--s4);color:var(--muted);font-siz
 @media(prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
 }
+
+/* cyberpunk + OG · loving neon */
+body{background:radial-gradient(1100px 560px at 50% -12%, rgba(255,61,134,.13), transparent 60%),radial-gradient(900px 480px at 88% 18%, rgba(51,227,255,.09), transparent 55%),linear-gradient(rgba(51,227,255,.028) 1px, transparent 1px) 0 0/44px 44px,linear-gradient(90deg, rgba(51,227,255,.028) 1px, transparent 1px) 0 0/44px 44px,var(--bg) !important;background-attachment:fixed}
+html::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9998;background:repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.14) 2px 3px);opacity:.55}
+.hero h1{font-family:"Hiragino Mincho ProN","Yu Mincho","Songti SC",Georgia,serif !important;font-weight:300 !important;text-shadow:0 0 20px rgba(255,61,134,.45), 0 0 46px rgba(51,227,255,.22)}
+.hero h1 .mark{text-shadow:0 0 24px rgba(255,61,134,.7)}
+.tagline em{text-shadow:0 0 12px rgba(51,227,255,.5)}
+.welcome::after{content:"█";color:var(--blue);margin-left:5px;animation:cpblink 1.1s steps(1) infinite;text-shadow:0 0 8px var(--blue)}
+@keyframes cpblink{50%{opacity:0}}
+.chip,.badge{font-family:ui-monospace,"SF Mono",Menlo,monospace !important;text-transform:uppercase;letter-spacing:.07em;border-color:var(--border-hi) !important;box-shadow:inset 0 0 14px rgba(51,227,255,.06)}
+.btn,.btn-pink,.btn-blue,.seg{font-family:ui-monospace,"SF Mono",Menlo,monospace !important;text-transform:uppercase;letter-spacing:.05em}
+.btn-pink{box-shadow:0 0 24px -7px var(--pink)}
+.btn-blue{box-shadow:0 0 24px -7px var(--blue)}
+.seg.active{box-shadow:0 0 22px -5px var(--pink)}
+.seg-nav{border-color:var(--border-hi);box-shadow:inset 0 0 22px rgba(51,227,255,.05)}
+.card,.detail-card,.form-card,.door-card{position:relative;border-color:var(--border-hi);box-shadow:0 0 0 1px rgba(51,227,255,.04), 0 12px 34px -20px #000}
+.card::before,.card::after{content:"";position:absolute;width:13px;height:13px;pointer-events:none;opacity:.75}
+.card::before{top:-1px;left:-1px;border-top:2px solid var(--blue);border-left:2px solid var(--blue)}
+.card::after{bottom:-1px;right:-1px;border-bottom:2px solid var(--pink);border-right:2px solid var(--pink)}
+.card:hover{box-shadow:0 0 28px -9px rgba(51,227,255,.4), inset 0 0 0 1px rgba(51,227,255,.14)}
+a{text-shadow:0 0 8px rgba(51,227,255,.22)}
+.xenia-band a{font-family:ui-monospace,"SF Mono",Menlo,monospace !important;letter-spacing:.06em;border-color:var(--border-hi);box-shadow:0 0 26px -9px var(--pink)}
+.xenia-band b{text-shadow:0 0 12px var(--pink)}
+@media(prefers-reduced-motion:reduce){.welcome::after{animation:none}}
 </style>
 </head>
 <body>
