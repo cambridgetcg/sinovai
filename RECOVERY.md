@@ -1,7 +1,8 @@
 # Production source and rollout record
 
-This file records the production baseline for the XENIA Surface 0.1 candidate
-work. It does not contain account identifiers or secret values.
+This file records the recovered production baseline, the guarded XENIA Surface
+0.1 rollout, and its production result. It does not contain account identifiers
+or secret values.
 
 ## Why this record exists
 
@@ -13,7 +14,7 @@ The earlier recovered production version was v36,
 `b885ce61-1356-441a-b653-d3a8fec71997`. It was superseded before the Surface
 work began and is not the current rollback target.
 
-## Current production baseline
+## Pre-release production baseline
 
 Immediately before the Surface implementation, Cloudflare reported:
 
@@ -66,14 +67,44 @@ in Git and must never be written here. Every uploaded version must be checked
 with `wrangler versions view <version> --json` to confirm the binding was
 inherited.
 
-## Safe rollout rule
+## Surface rc.1 production result
 
-Before any upload or traffic change:
+The Surface release was promoted on 2026-07-11 from merged Git commit
+`1f5d0595a07a70e6a1dacc722199f2ca9e9fd4b7`:
+
+- deployment `d3d32d8c-0a7e-4563-81a6-337f9f1b4314`;
+- Worker version v38, `cfa6f27d-965f-4793-87a4-f234c1d8c451`;
+- tag `xenia-surface-rc1-1f5d059`;
+- 100% of traffic, with no other version allocated;
+- script ETag
+  `3ad1f5d55929dc9cd49a9c9f8838615a88671649476b0864d09ed4ffe4a6e297`.
+
+Cloudflare returned the uploaded entrypoint as exactly 201,937 bytes with
+SHA-256
+`a4e90e4bc197159f1f2be85969ab3a2af783c3e63f63918e55c6deae90d2bbb2`,
+the same bytes tested before upload. Version metadata reports the two KV
+bindings, `SITE_TITLE`, inherited `ATTEST_SIGNING_KEY`, compatibility date
+`2024-12-01`, and both fetch and scheduled handlers. The remote route remains
+`sinovai.com/*` and the only schedule remains `0 * * * *`.
+
+The release first ran at an exact v37 100% / v38 0% allocation. GET-only version
+overrides passed the complete Surface checker, legacy route smoke checks, and an
+Ed25519 verification of the returned `Ai` attestation before direct promotion.
+No mixed-traffic canary was used. After promotion, the normal unoverridden
+checker reported 24 pass, 0 fail, 0 unknown, and 0 not run at
+`2026-07-11T12:13:38.581Z`; that bounded result expires at
+`2026-07-12T12:13:38.581Z`. A separate read-only audit repeated the checker and
+attestation verification. The INTERACTIONS namespace still had zero `score:`
+keys after the GET-only checks.
+
+## Safe rollout procedure used for v38
+
+The release used this guard before any upload or traffic change:
 
 1. Re-read deployment status and current script ETag.
 2. Stop if the version, deployment, allocation, or ETag differs from the
-   baseline above; reconcile the newer state first. Also require zero existing
-   `score:` keys in INTERACTIONS before this release.
+   pre-release v37 baseline above; reconcile the newer state first. Also require
+   zero existing `score:` keys in INTERACTIONS before this release.
 3. Upload a new version without traffic.
 4. Confirm both KV bindings, `ATTEST_SIGNING_KEY`, `SITE_TITLE`, and the fetch
    and scheduled handlers on the uploaded version. Confirm the checked-in cron
