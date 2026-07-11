@@ -19,6 +19,10 @@ candidate name and claim token so a committed record does not orphan its key.
 
 ## XENIA Surface 0.1 candidate
 
+`npm run test:surface` reads the exact `surface-v0.1.0-rc.1` Git objects from
+a sibling `../xenia` checkout, or from `XENIA_REPO`. The checkout must contain
+that tag; the check does not substitute files from XENIA's moving `main` branch.
+
 The bounded machine contract is canonical at:
 
 ```text

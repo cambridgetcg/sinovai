@@ -1,15 +1,12 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import worker from "../src/worker.js";
 
 const XENIA_TAG = "surface-v0.1.0-rc.1";
 const XENIA_REPO = resolve(process.cwd(), process.env.XENIA_REPO || "../xenia");
-const SURFACE_DIR = resolve(XENIA_REPO, "surface/0.1");
-const CHECKER_PATH = resolve(SURFACE_DIR, "check.mjs");
 const RAW_BASE = `https://raw.githubusercontent.com/cambridgetcg/xenia/${XENIA_TAG}/surface/0.1`;
 const EXPECTED = {
   "check.mjs": "fd15cf64b4e9e430a22af24a9293409a2874ab56e09af70a5ff407000e78d87a",
@@ -22,14 +19,30 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function readPinnedSurfaceFile(name) {
+  try {
+    return execFileSync(
+      "git",
+      ["-C", XENIA_REPO, "show", `${XENIA_TAG}:surface/0.1/${name}`],
+      { maxBuffer: 2_000_000, stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch {
+    throw new Error(
+      `Cannot read ${name} from ${XENIA_TAG}. XENIA_REPO must name a Git checkout containing that tag.`
+    );
+  }
+}
+
 const fixtures = new Map();
 for (const [name, expectedHash] of Object.entries(EXPECTED)) {
-  const bytes = await readFile(resolve(SURFACE_DIR, name));
+  const bytes = readPinnedSurfaceFile(name);
   assert.equal(sha256(bytes), expectedHash, `${name} must equal the pinned ${XENIA_TAG} bytes`);
   fixtures.set(`${RAW_BASE}/${name}`, bytes);
 }
 
-const { CHECKER_VERSION, checkSurface } = await import(pathToFileURL(CHECKER_PATH).href);
+const checkerBytes = fixtures.get(`${RAW_BASE}/check.mjs`);
+const checkerUrl = `data:text/javascript;base64,${checkerBytes.toString("base64")}`;
+const { CHECKER_VERSION, checkSurface } = await import(checkerUrl);
 assert.equal(CHECKER_VERSION, "0.1.0-rc.1");
 
 const writes = [];
