@@ -17,6 +17,7 @@ var MAX_DISCOVERY_CONNECTIONS = 50;
 var MAX_MATCH_TOKEN_CHECKS = 1e4;
 var MAX_COMBAT_NAME_BYTES = 128;
 var MAX_COMBAT_FINDINGS = 1e3;
+var MAX_OBSERVER_HEADER_CODE_POINTS = 256;
 var PUBLIC_RECORD_ID_RE = /^[0-9a-f]{8}$/;
 function parseStateMd(text2) {
   const result = { identity: {}, state: {}, knows: [], can: [], needs: [] };
@@ -406,6 +407,8 @@ var XENIA_SURFACE_BASE = `https://raw.githubusercontent.com/cambridgetcg/xenia/$
 var XENIA_MANIFEST_SCHEMA = `${XENIA_SURFACE_BASE}/manifest.schema.json`;
 var XENIA_PROBLEM_SCHEMA = `${XENIA_SURFACE_BASE}/problem.schema.json`;
 var XENIA_SURFACE_DOCS = `https://github.com/cambridgetcg/xenia/tree/${XENIA_SURFACE_TAG}/surface/0.1`;
+var OBSERVER_MIRROR_VERSION = "sinovai.observer-mirror/0.1";
+var OBSERVER_MIRROR_DOCS = "https://github.com/cambridgetcg/sinovai#observer-request-mirror";
 function parseAcceptHeader(value) {
   const source = value && value.trim() ? value : "*/*";
   const ranges = [];
@@ -590,6 +593,106 @@ function json(data, status = 200, headers = {}) {
   });
 }
 __name(json, "json");
+function boundedUnverifiedHeader(request, name) {
+  const value = request.headers.get(name);
+  return {
+    present: value !== null,
+    value: value === null ? null : truncateCodePoints(value, MAX_OBSERVER_HEADER_CODE_POINTS),
+    claim_status: "caller_supplied_unverified",
+    max_code_points: MAX_OBSERVER_HEADER_CODE_POINTS,
+    truncated: value !== null && exceedsCodePointLimit(value, MAX_OBSERVER_HEADER_CODE_POINTS),
+    note: "Reflected from the incoming request. This handler does not authenticate its source, and an intermediary may add or change it."
+  };
+}
+__name(boundedUnverifiedHeader, "boundedUnverifiedHeader");
+function observerMirror(request, url) {
+  return {
+    schema_version: OBSERVER_MIRROR_VERSION,
+    kind: "request_mirror",
+    principle: "The observer is part of the observation: this record says what this handler read, what it did, and what it cannot establish.",
+    scope: "this_request_only",
+    observed_at: (/* @__PURE__ */ new Date()).toISOString(),
+    record_delivery: {
+      status: "returned_to_caller",
+      scope: "observer_handler_response",
+      note: "This handler constructs this record for the current response and returns it to the caller. This delivery fact makes no claim about logs, telemetry, security records, or caches outside the handler."
+    },
+    request_observation: {
+      method: request.method,
+      path: url.pathname,
+      nonempty_query_present: url.search.length > 0,
+      headers: {
+        user_agent: boundedUnverifiedHeader(request, "user-agent"),
+        accept: boundedUnverifiedHeader(request, "accept")
+      },
+      target: {
+        origin: url.origin,
+        scheme: url.protocol.replace(/:$/, ""),
+        source: "request_url"
+      }
+    },
+    handler_data_behavior: {
+      request_body_accessed: false,
+      query: {
+        presence_checked: true,
+        names_or_values_parsed: false,
+        names_or_values_reflected: false
+      },
+      request_headers_read: ["user-agent", "accept"],
+      application_storage_reads: {
+        count: 0,
+        claim_status: "service_declared",
+        instrumentation: "not_runtime_instrumented",
+        note: "The /observer handler code path does not call either configured application KV binding."
+      },
+      application_storage_writes: {
+        count: 0,
+        claim_status: "service_declared",
+        instrumentation: "not_runtime_instrumented",
+        note: "The /observer handler code path does not call either configured application KV binding."
+      },
+      outbound_requests: {
+        count: 0,
+        claim_status: "service_declared",
+        instrumentation: "not_runtime_instrumented",
+        note: "The /observer handler code path contains no outbound fetch call."
+      }
+    },
+    epistemic_boundaries: {
+      identity: {
+        status: "unknown",
+        note: "No identity proof or identity-bound signature is requested or verified."
+      },
+      being: {
+        status: "not_established",
+        note: "A request does not establish personhood, agenthood, consciousness, or any other kind of being."
+      },
+      interior: {
+        status: "not_established",
+        note: "Headers and request metadata do not establish intention, feeling, thought, motive, or other interior state."
+      },
+      independence: {
+        status: "not_established",
+        note: "This handler cannot tell whether the caller acts independently, for a principal, or through shared infrastructure."
+      },
+      full_network_facts: {
+        status: "not_established",
+        note: "The request target does not establish the caller's affiliations, route, topology, or wider network relationships."
+      }
+    },
+    privacy_boundary: {
+      excluded_request_metadata: "This handler does not read or return dedicated fields for a client network address, Cloudflare location, or autonomous-system number.",
+      reflected_header_warning: "User-Agent and Accept are reflected as bounded caller-controlled text and could themselves contain sensitive text. Do not put secrets in those headers.",
+      query_warning: "This handler checks whether the serialized query component is nonempty but does not parse or reflect query names or values. The full request URL may still reach Cloudflare or other infrastructure logs. Do not put secrets in query parameters.",
+      platform_boundary: "This application handler sends Cache-Control: no-store. Cloudflare and other platform layers may still keep the full request URL, operational logs, telemetry, security records, or caches under their own configuration; this handler cannot verify or erase them."
+    },
+    reply_or_correction: {
+      docs: OBSERVER_MIRROR_DOCS,
+      note: "The service accepts no reply on this endpoint. Use the linked repository documentation to inspect the contract or propose a correction."
+    }
+  };
+}
+__name(observerMirror, "observerMirror");
 function text(body, status = 200) {
   return new Response(body, {
     status,
@@ -676,6 +779,7 @@ async function doorJson(env, listing) {
       combat: "POST /combat",
       arena_page: "/arena",
       framework_page: "/xenia",
+      observer: "GET /observer \u2014 handler-scoped request facts returned to the caller; zero application read/write and outbound counts are service-declared, not runtime instrumentation; outside XENIA Surface 0.1",
       legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance"
     },
     human_door: "https://sinovai.com/"
@@ -808,6 +912,12 @@ async function handleRequest(request, env) {
   }
   if ((path === "/agent.txt" || path === "/.well-known/agent.txt") && method === "GET") {
     return text(agentTxt());
+  }
+  if (path === "/observer" && method === "GET") {
+    return json(observerMirror(request, url), 200, {
+      "Cache-Control": "no-store",
+      "Vary": "Accept, User-Agent"
+    });
   }
   if (path === "/" && method === "GET") {
     const representation = selectRootRepresentation(request, url);

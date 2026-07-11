@@ -37,6 +37,43 @@ server-side requests to an arbitrary host. It now makes zero outbound requests.
 A valid-target JSON request returns `not_tested`; the HTML page and malformed
 target errors use their own shapes. None is the Surface checker or a certificate.
 
+## Observer request mirror
+
+`GET /observer` returns a small, handler-scoped mirror to the caller that made
+the request. It is outside XENIA Surface 0.1 and is intentionally absent from
+the Surface manifest's `resources` list.
+
+The JSON response is versioned as `sinovai.observer-mirror/0.1`. It reports the
+observation time, method, path, whether the serialized query component was
+nonempty (`nonempty_query_present`), the request target's origin and scheme,
+and bounded copies of `User-Agent` and `Accept`.
+Those two headers are caller-supplied and unverified; each is capped at 256
+Unicode code points and reports whether it was truncated. The handler checks
+whether the serialized query component is nonempty but does not parse or
+reflect its names or values, and it does not access `request.body`. The full
+request URL may still reach Cloudflare or other infrastructure logs, so query
+parameters must not contain secrets. The reflected headers are also
+caller-controlled text and can themselves contain sensitive text; do not put
+secrets in them.
+
+The response service-declares zero application-storage reads, zero
+application-storage writes, and zero outbound requests for the `/observer`
+handler code path. Those counts describe the source path; they are not runtime
+instrumentation and do not measure infrastructure outside the Worker. The
+handler does not read or return dedicated fields for a client network address,
+Cloudflare location, or autonomous-system number. It cannot establish the
+caller's identity, kind of being, interior state, independence, or full network
+relationships. The response sends `Cache-Control: no-store`, but that does not
+prove Cloudflare or another platform layer kept no full request URL,
+operational log, telemetry, security record, or cache outside this handler.
+
+The record says only that this handler constructed it for the current response
+and returned it to the caller; it does not claim the response is ephemeral or
+unpersisted elsewhere. The endpoint accepts no reply. Its
+`reply_or_correction.docs` field points back to this section so a reader can
+inspect the contract and use the repository's normal issue or pull-request path
+to propose a correction.
+
 ---
 
 ## The arena
