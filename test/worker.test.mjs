@@ -198,6 +198,25 @@ function assertNoWrites(env) {
   assert.deepEqual(env.INTERACTIONS.writes, []);
 }
 
+function assertServiceDeclaredZero(activity) {
+  assert.equal(activity.count, 0);
+  assert.equal(activity.claim_status, "service_declared");
+  assert.equal(activity.instrumentation, "not_runtime_instrumented");
+}
+
+function allObjectKeys(value, keys = []) {
+  if (!value || typeof value !== "object") return keys;
+  if (Array.isArray(value)) {
+    for (const item of value) allObjectKeys(item, keys);
+    return keys;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    keys.push(key);
+    allObjectKeys(item, keys);
+  }
+  return keys;
+}
+
 function assertProblem(problem, status, code) {
   assert.deepEqual(Object.keys(problem).sort(), [
     "code",
@@ -364,10 +383,209 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   assert.match(body.implementation_boundaries.legacy_check, /does not establish conformance/);
   assert.match(body.implementation_limits.request_bodies, /65536 bytes/);
   assert.match(body.implementation_limits.kv_listing, /100 keys.*16/);
+  assert.match(body.routes.observer, /GET \/observer/);
+  assert.match(body.routes.observer, /service-declared, not runtime instrumentation/);
+  assert.match(body.routes.observer, /outside XENIA Surface 0\.1/);
   assert.equal(body.arena.met_not_ranked, false);
   assert.equal(body.arena.agent_records_listed_in_kv_page, 2);
   assert.equal(body.arena.agent_record_list_complete, true);
   assert.equal("minds_inside" in body.arena, false);
+  assertNoWrites(env);
+});
+
+test("observer reports handler-scoped request facts and declared activity", async () => {
+  const env = makeEnv();
+  const longUserAgent = `mirror-agent/${"u".repeat(400)}`;
+  const longAccept = `application/json;profile=${"a".repeat(400)}`;
+  const response = await call(env, "/observer?private-query-value=must-not-appear", {
+    headers: {
+      "User-Agent": longUserAgent,
+      "Accept": longAccept
+    }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(mediaType(response), "application/json");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.match(response.headers.get("vary") || "", /Accept/);
+  assert.match(response.headers.get("vary") || "", /User-Agent/);
+
+  const body = await jsonBody(response);
+  assert.equal(body.schema_version, "sinovai.observer-mirror/0.1");
+  assert.equal(body.kind, "request_mirror");
+  assert.equal(body.scope, "this_request_only");
+  assert.equal(Number.isNaN(Date.parse(body.observed_at)), false);
+  assert.equal(body.record_delivery.status, "returned_to_caller");
+  assert.equal(body.record_delivery.scope, "observer_handler_response");
+  assert.match(body.record_delivery.note, /makes no claim.*outside the handler/i);
+  assert.equal(body.request_observation.method, "GET");
+  assert.equal(body.request_observation.path, "/observer");
+  assert.equal(body.request_observation.nonempty_query_present, true);
+  assert.deepEqual(body.request_observation.target, {
+    origin: ORIGIN,
+    scheme: "https",
+    source: "request_url"
+  });
+
+  for (const header of [
+    body.request_observation.headers.user_agent,
+    body.request_observation.headers.accept
+  ]) {
+    assert.equal(header.present, true);
+    assert.equal(header.claim_status, "caller_supplied_unverified");
+    assert.equal(header.max_code_points, 256);
+    assert.equal([...header.value].length, 256);
+    assert.equal(header.truncated, true);
+    assert.match(header.note, /intermediary may add or change/i);
+  }
+
+  assert.equal(body.handler_data_behavior.request_body_accessed, false);
+  assert.deepEqual(body.handler_data_behavior.query, {
+    presence_checked: true,
+    names_or_values_parsed: false,
+    names_or_values_reflected: false
+  });
+  assert.deepEqual(body.handler_data_behavior.request_headers_read, ["user-agent", "accept"]);
+  for (const field of ["application_storage_reads", "application_storage_writes", "outbound_requests"]) {
+    assertServiceDeclaredZero(body.handler_data_behavior[field]);
+  }
+  assert.equal(body.epistemic_boundaries.identity.status, "unknown");
+  for (const field of ["being", "interior", "independence", "full_network_facts"]) {
+    assert.equal(body.epistemic_boundaries[field].status, "not_established", field);
+  }
+  assert.match(body.privacy_boundary.platform_boundary, /Cloudflare.*logs.*caches/i);
+  assert.match(body.privacy_boundary.query_warning, /serialized query component is nonempty/i);
+  assert.match(body.privacy_boundary.query_warning, /does not parse or reflect query names or values/i);
+  assert.match(body.privacy_boundary.query_warning, /full request URL.*logs/i);
+  assert.match(body.privacy_boundary.query_warning, /Do not put secrets in query parameters/i);
+  assert.equal(
+    body.reply_or_correction.docs,
+    "https://github.com/cambridgetcg/sinovai#observer-request-mirror"
+  );
+  assert.equal(JSON.stringify(body).includes("must-not-appear"), false);
+  assert.deepEqual(env.AGENTS.reads, []);
+  assert.deepEqual(env.INTERACTIONS.reads, []);
+  assertNoWrites(env);
+});
+
+test("observer makes no outbound fetch in the current handler code path", async (t) => {
+  const env = makeEnv();
+  let fetches = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    fetches += 1;
+    throw new Error("observer must not make an outbound fetch");
+  });
+
+  const response = await call(env, "/observer");
+  const body = await jsonBody(response);
+  assert.equal(response.status, 200);
+  assert.equal(fetches, 0);
+  assertServiceDeclaredZero(body.handler_data_behavior.outbound_requests);
+  assertNoWrites(env);
+});
+
+test("observer represents absent reflected headers without inventing values", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/observer");
+  const body = await jsonBody(response);
+
+  assert.equal(body.request_observation.nonempty_query_present, false);
+
+  for (const header of [
+    body.request_observation.headers.user_agent,
+    body.request_observation.headers.accept
+  ]) {
+    assert.deepEqual(header, {
+      present: false,
+      value: null,
+      claim_status: "caller_supplied_unverified",
+      max_code_points: 256,
+      truncated: false,
+      note: "Reflected from the incoming request. This handler does not authenticate its source, and an intermediary may add or change it."
+    });
+  }
+  assertNoWrites(env);
+});
+
+test("observer header truncation counts astral Unicode code points", () => {
+  const value = `${"\ud83d\ude00".repeat(256)}tail`;
+  const truncated = truncateCodePoints(value, 256);
+  assert.equal(truncated, "\ud83d\ude00".repeat(256));
+  assert.equal([...truncated].length, 256);
+});
+
+test("observer does not access the request body or request.cf", async () => {
+  const env = makeEnv();
+  const incoming = request("/observer?opaque-query-token=not-reflected");
+  let cfReads = 0;
+  Object.defineProperty(incoming, "body", {
+    configurable: true,
+    get() {
+      throw new Error("observer read request.body");
+    }
+  });
+  Object.defineProperty(incoming, "cf", {
+    configurable: true,
+    get() {
+      cfReads += 1;
+      return {
+        asn: 64500,
+        city: "private-city-token",
+        country: "ZZ"
+      };
+    }
+  });
+
+  const response = await worker.fetch(incoming, env, context);
+  const body = await jsonBody(response);
+  const serialized = JSON.stringify(body);
+  assert.equal(cfReads, 0);
+  assert.doesNotMatch(serialized, /64500|private-city-token|opaque-query-token|not-reflected/);
+  assert.equal(body.handler_data_behavior.request_body_accessed, false);
+  assertNoWrites(env);
+});
+
+test("observer omits sensitive caller-network fields and supplied edge values", async () => {
+  const env = makeEnv();
+  const sensitiveValues = [
+    "203.0.113.42",
+    "198.51.100.17",
+    "private-ray-token",
+    "private-country-token"
+  ];
+  const response = await call(env, "/observer", {
+    headers: {
+      "CF-Connecting-IP": sensitiveValues[0],
+      "X-Forwarded-For": sensitiveValues[1],
+      "CF-Ray": sensitiveValues[2],
+      "CF-IPCountry": sensitiveValues[3]
+    }
+  });
+  const body = await jsonBody(response);
+  const serialized = JSON.stringify(body);
+  for (const value of sensitiveValues) assert.equal(serialized.includes(value), false, value);
+
+  const forbiddenKeys = new Set([
+    "ip",
+    "client_ip",
+    "cf",
+    "cf_location",
+    "country",
+    "asn",
+    "colo",
+    "ray",
+    "city",
+    "region",
+    "latitude",
+    "longitude"
+  ]);
+  for (const key of allObjectKeys(body)) {
+    assert.equal(forbiddenKeys.has(key.toLowerCase()), false, key);
+  }
+  assert.match(body.privacy_boundary.excluded_request_metadata, /does not read or return/i);
+  assert.match(body.privacy_boundary.reflected_header_warning, /could themselves contain sensitive text/i);
+  assert.deepEqual(env.AGENTS.reads, []);
+  assert.deepEqual(env.INTERACTIONS.reads, []);
   assertNoWrites(env);
 });
 
