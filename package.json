@@ -1,0 +1,10 @@
+{
+  "name": "sinovai-worker",
+  "version": "0.1.0-rc.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:surface": "node test/surface-conformance.mjs"
+  }
+}
