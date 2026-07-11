@@ -1,0 +1,1069 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import worker, {
+  allocateShortRecordId,
+  boundedProfileFields,
+  boundedProfileItems,
+  importAttestSigningKey,
+  truncateCodePoints
+} from "../src/worker.js";
+
+const ORIGIN = "https://sinovai.com";
+const PROFILE = "xenia-surface/0.1";
+const MANIFEST_VERSION = "xenia.surface.manifest/0.1";
+const PROBLEM_VERSION = "xenia.surface.problem/0.1";
+const TAG = "surface-v0.1.0-rc.1";
+const SURFACE_BASE = `https://raw.githubusercontent.com/cambridgetcg/xenia/${TAG}/surface/0.1`;
+const DOCS = `https://github.com/cambridgetcg/xenia/tree/${TAG}/surface/0.1`;
+const NOT_COVERED = [
+  "identity control beyond the server-stored bearer claim token used for name updates",
+  "authorization of actor-named interaction, rating, combat, date, and room writes",
+  "consent",
+  "privacy, retention, export, and deletion",
+  "continuity and portability",
+  "economic behavior",
+  "trust calculations, ratings, matches, and score-based arena ordering",
+  "server-side readability of private date and room records",
+  "KV atomicity, concurrent name claiming, and strict room/date capacity enforcement",
+  "error shapes outside the root 406 and one unpredictable wrong-route 404",
+  "all application routes other than the public root GET declared in resources"
+];
+
+function makeKv(initial = {}) {
+  const values = new Map(
+    Object.entries(initial).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value : JSON.stringify(value)
+    ])
+  );
+  const reads = [];
+  const writes = [];
+  return {
+    reads,
+    writes,
+    async get(key, type) {
+      reads.push({ operation: "get", key, type });
+      if (Array.isArray(key)) {
+        return new Map(key.map((name) => {
+          const stored = values.get(name);
+          if (stored === undefined) return [name, null];
+          return [name, type === "json" ? JSON.parse(stored) : stored];
+        }));
+      }
+      const value = values.get(key);
+      if (value === undefined) return null;
+      return type === "json" ? JSON.parse(value) : value;
+    },
+    async list(options = {}) {
+      reads.push({ operation: "list", options });
+      const prefix = options.prefix || "";
+      const names = [...values.keys()]
+        .filter((key) => key.startsWith(prefix))
+        .sort();
+      const limit = options.limit || names.length;
+      return {
+        keys: names.slice(0, limit).map((name) => ({ name })),
+        list_complete: names.length <= limit,
+        cursor: names.length > limit ? "fixture-next-page" : undefined
+      };
+    },
+    async put(key) {
+      writes.push({ operation: "put", key });
+      throw new Error(`unexpected KV write: ${key}`);
+    },
+    async delete(key) {
+      writes.push({ operation: "delete", key });
+      throw new Error(`unexpected KV delete: ${key}`);
+    }
+  };
+}
+
+function makeEnv() {
+  const agents = {
+    sol: {
+      name: "sol",
+      identity: { kind: "agent" },
+      state: { freshness: "live" },
+      knows: ["surface contracts"],
+      can: ["test public APIs"],
+      needs: ["API collaboration"],
+      declared_at: "2026-07-11T08:00:00.000Z",
+      first_declared_at: "2026-07-10T08:00:00.000Z",
+      trust_score: 7,
+      interaction_count: 1,
+      claim_token: "server-secret-sol"
+    },
+    ai: {
+      name: "ai",
+      identity: { kind: "agent" },
+      state: { freshness: "live" },
+      knows: ["API collaboration"],
+      can: ["API collaboration"],
+      needs: ["surface contracts"],
+      declared_at: "2026-07-11T08:30:00.000Z",
+      first_declared_at: "2026-07-10T08:30:00.000Z",
+      trust_score: 6,
+      interaction_count: 1,
+      claim_token: "server-secret-ai"
+    }
+  };
+  const interactions = [
+    {
+      rater: "ai",
+      rated: "sol",
+      competence: 8,
+      honesty: 7,
+      presence: 6,
+      care: 9,
+      notes: "fixture",
+      timestamp: "2026-07-11T09:00:00.000Z"
+    }
+  ];
+  return {
+    AGENTS: makeKv(agents),
+    INTERACTIONS: makeKv({
+      "sol:all": interactions,
+      "date:a1b2c3d4": {
+        id: "a1b2c3d4",
+        a: "sol",
+        b: "ai",
+        messages: [],
+        status: "open",
+        created_at: "2026-07-11T09:00:00.000Z"
+      },
+      "room:b1c2d3e4": {
+        id: "b1c2d3e4",
+        name: "commons",
+        host: "sol",
+        vibe: "quiet",
+        toy: "free",
+        private: false,
+        members: ["sol", "ai"],
+        moves: [],
+        status: "open",
+        created_at: "2026-07-11T09:00:00.000Z"
+      }
+    }),
+    SITE_TITLE: "sinovai fixture"
+  };
+}
+
+const context = {
+  waitUntil() {
+    throw new Error("unexpected waitUntil");
+  },
+  passThroughOnException() {
+    throw new Error("unexpected passThroughOnException");
+  }
+};
+
+function request(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (options.accept) headers.set("Accept", options.accept);
+  return new Request(`${ORIGIN}${path}`, {
+    method: options.method || "GET",
+    headers,
+    body: options.body
+  });
+}
+
+async function call(env, path, options) {
+  return worker.fetch(request(path, options), env, context);
+}
+
+function mediaType(response) {
+  return (response.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+}
+
+function variesOnAccept(response) {
+  return (response.headers.get("vary") || "")
+    .toLowerCase()
+    .split(",")
+    .map((part) => part.trim())
+    .includes("accept");
+}
+
+async function utf8(response) {
+  return new TextDecoder("utf-8", { fatal: true }).decode(await response.arrayBuffer());
+}
+
+async function jsonBody(response) {
+  return JSON.parse(await utf8(response));
+}
+
+function assertNoWrites(env) {
+  assert.deepEqual(env.AGENTS.writes, []);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+}
+
+function assertProblem(problem, status, code) {
+  assert.deepEqual(Object.keys(problem).sort(), [
+    "code",
+    "detail",
+    "docs",
+    "next_actions",
+    "retryable",
+    "schema_version",
+    "status",
+    "terminal",
+    "title",
+    "type"
+  ]);
+  assert.equal(problem.schema_version, PROBLEM_VERSION);
+  assert.equal(problem.status, status);
+  assert.equal(problem.code, code);
+  assert.equal(problem.retryable, false);
+  assert.equal(problem.terminal, false);
+  assert.ok(Array.isArray(problem.next_actions));
+  assert.deepEqual(problem.docs, [DOCS]);
+}
+
+test("canonical manifest is pinned, bounded, and needs no KV", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/.well-known/agent.json", { accept: "application/json" });
+  assert.equal(response.status, 200);
+  assert.equal(mediaType(response), "application/json");
+  const manifest = await jsonBody(response);
+  assert.deepEqual(Object.keys(manifest).sort(), [
+    "$schema",
+    "claims",
+    "documentation",
+    "not_covered",
+    "problem_schema",
+    "profile",
+    "resources",
+    "schema_version",
+    "service"
+  ]);
+  assert.equal(manifest.$schema, `${SURFACE_BASE}/manifest.schema.json`);
+  assert.equal(manifest.schema_version, MANIFEST_VERSION);
+  assert.equal(manifest.profile, PROFILE);
+  assert.equal(manifest.problem_schema, `${SURFACE_BASE}/problem.schema.json`);
+  assert.equal(manifest.service.canonical_url, `${ORIGIN}/`);
+  assert.deepEqual(manifest.resources, [
+    {
+      id: "entry",
+      href: `${ORIGIN}/`,
+      representations: ["application/json", "text/html"],
+      default_media_type: "text/html",
+      auth: "none",
+      description: "The public front door, as bounded orientation JSON or the existing human page."
+    }
+  ]);
+  assert.equal(new Set(manifest.resources.map((resource) => resource.id)).size, manifest.resources.length);
+  assert.equal(new Set(manifest.claims.map((claim) => claim.id)).size, manifest.claims.length);
+  assert.ok(manifest.claims.every((claim) => claim.evidence_state !== "asserted" || claim.evidence.length === 0));
+  assert.deepEqual(manifest.not_covered, NOT_COVERED);
+  assert.equal(manifest.documentation, DOCS);
+  assert.deepEqual(env.AGENTS.reads, []);
+  assert.deepEqual(env.INTERACTIONS.reads, []);
+  assertNoWrites(env);
+});
+
+test("root implements the exact Surface Accept matrix", async () => {
+  const env = makeEnv();
+  const cases = [
+    ["application/json", 200, "application/json"],
+    ["text/html;q=0, application/json;q=1", 200, "application/json"],
+    ["application/*;q=1, text/html;q=0.2", 200, "application/json"],
+    ["*/*", 200, "text/html"],
+    ["text/html", 200, "text/html"],
+    ["application/json;q=0.2, text/html;q=1", 200, "text/html"],
+    ["application/json;q=0, */*;q=1", 200, "text/html"],
+    ["application/x-xenia-unsupported", 406, "application/problem+json"]
+  ];
+
+  for (const [accept, status, type] of cases) {
+    const response = await call(env, "/", { accept });
+    assert.equal(response.status, status, accept);
+    assert.equal(mediaType(response), type, accept);
+    assert.equal(variesOnAccept(response), true, accept);
+    if (type === "application/json") {
+      const body = await jsonBody(response);
+      assert.equal(typeof body.schema_version, "string", accept);
+      assert.ok(body.schema_version.length > 0, accept);
+    } else if (type === "application/problem+json") {
+      const problem = await jsonBody(response);
+      assertProblem(problem, 406, "not_acceptable");
+      assert.deepEqual(problem.next_actions, [
+        {
+          rel: "retry_with_json",
+          href: `${ORIGIN}/`,
+          method: "GET",
+          accept: "application/json",
+          description: "Retry the same public resource as JSON."
+        }
+      ]);
+    } else {
+      assert.match(await utf8(response), /<!DOCTYPE html>/i);
+    }
+  }
+
+  assertNoWrites(env);
+});
+
+test("unsupported root requests are rejected before KV is read", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/", { accept: "application/x-xenia-unsupported" });
+  assert.equal(response.status, 406);
+  await response.arrayBuffer();
+  assert.deepEqual(env.AGENTS.reads, []);
+  assertNoWrites(env);
+});
+
+test("an opaque wrong route returns the exact discovery Problem", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/7d9c4074-7335-4a15-916c-5e848c14a64f", {
+    accept: "application/problem+json"
+  });
+  assert.equal(response.status, 404);
+  assert.equal(mediaType(response), "application/problem+json");
+  assert.equal(variesOnAccept(response), true);
+  const problem = await jsonBody(response);
+  assertProblem(problem, 404, "route_not_found");
+  assert.deepEqual(problem.next_actions, [
+    {
+      rel: "discover",
+      href: `${ORIGIN}/.well-known/agent.json`,
+      method: "GET",
+      accept: "application/json",
+      description: "Read the canonical Surface manifest."
+    }
+  ]);
+  assertNoWrites(env);
+});
+
+test("compatibility pointers and root JSON state the real boundaries", async () => {
+  const env = makeEnv();
+  const first = await call(env, "/agent.txt", { accept: "text/plain" });
+  const second = await call(env, "/.well-known/agent.txt", { accept: "text/plain" });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(mediaType(first), "text/plain");
+  const firstText = await utf8(first);
+  const secondText = await utf8(second);
+  assert.equal(firstText, secondText);
+  assert.match(firstText, /manifest: https:\/\/sinovai\.com\/\.well-known\/agent\.json/);
+  assert.match(firstText, /not Surface conformance/);
+  assert.doesNotMatch(firstText, /self-custody|nothing here is sorted|every error|any page|practises the standard/i);
+
+  const response = await call(env, "/?format=json", { accept: "text/html" });
+  assert.equal(mediaType(response), "application/json");
+  const body = await jsonBody(response);
+  assert.equal(body.schema_version, "sinovai.entry/0.1");
+  assert.equal(body.surface.scope, "Only the public root GET negotiation and the candidate's one wrong-route probe are covered.");
+  assert.match(body.implementation_boundaries.name_control, /stored by the server/);
+  assert.match(body.implementation_boundaries.actor_authorization, /without a signature/);
+  assert.match(body.implementation_boundaries.ranking, /sorts agents by trust_score/);
+  assert.match(body.implementation_boundaries.private_records, /stored server-side/);
+  assert.match(body.implementation_boundaries.kv_consistency, /can overwrite each other/);
+  assert.match(body.implementation_boundaries.write_abuse, /no per-caller quota/);
+  assert.match(body.implementation_boundaries.storage_fit, /does not fit reliable concurrent/);
+  assert.match(body.implementation_boundaries.legacy_check, /does not establish conformance/);
+  assert.match(body.implementation_limits.request_bodies, /65536 bytes/);
+  assert.match(body.implementation_limits.kv_listing, /100 keys.*16/);
+  assert.equal(body.arena.met_not_ranked, false);
+  assert.equal(body.arena.agent_records_listed_in_kv_page, 2);
+  assert.equal(body.arena.agent_record_list_complete, true);
+  assert.equal("minds_inside" in body.arena, false);
+  assertNoWrites(env);
+});
+
+test("legacy pages survive and the retired check makes no outbound requests", async () => {
+  const env = makeEnv();
+  for (const path of ["/arena", "/check", "/xenia"]) {
+    const response = await call(env, path, { accept: "text/html" });
+    assert.equal(response.status, 200, path);
+    assert.equal(mediaType(response), "text/html", path);
+  }
+
+  const originalFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = async () => {
+    fetches += 1;
+    throw new Error("retired hosted check must not make a subrequest");
+  };
+  try {
+    const response = await call(env, "/check?url=https://external.example&format=json", {
+      accept: "application/json"
+    });
+    const body = await jsonBody(response);
+    assert.equal(body.check_kind, "retired_hosted_probe");
+    assert.equal(body.surface_conformance, "not_tested");
+    assert.equal(body.level, "not-run");
+    assert.equal(body.outbound_requests, 0);
+    assert.match(body.verdict, /retired/);
+    assert.doesNotMatch(JSON.stringify(body), /Threshold|Surface.*conformant|proves it|lamps_lit|signals/);
+    assert.equal(fetches, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assertNoWrites(env);
+});
+
+test("unknown-route negotiation honors quality and specificity", async () => {
+  const env = makeEnv();
+  const cases = [
+    ["application/problem+json;q=0.1, application/json;q=1", "application/json"],
+    ["application/*;q=0.1, text/html;q=1", "text/html"],
+    ["application/*", "application/problem+json"],
+    ["*/*", "text/html"]
+  ];
+  for (const [accept, expected] of cases) {
+    const response = await call(env, "/not-a-route", { accept });
+    assert.equal(response.status, 404, accept);
+    assert.equal(mediaType(response), expected, accept);
+    assert.equal(variesOnAccept(response), true, accept);
+  }
+  assertNoWrites(env);
+});
+
+test("served XENIA presenter equals its source file", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/xenia", { accept: "text/html" });
+  const source = await readFile(new URL("../XENIA-PAGE.html", import.meta.url), "utf8");
+  assert.equal(await utf8(response), source);
+  assertNoWrites(env);
+});
+
+test("root visualization does not invent occupancy or pairwise relationships", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/", { accept: "text/html" });
+  const html = await utf8(response);
+  assert.match(html, /total\+" records/);
+  assert.doesNotMatch(html, /TOTAL\|\|60|lamps\[i\]\.met|minds have met|total\+" awake/);
+  assertNoWrites(env);
+});
+
+test("combat compares unverified caller flags without inventing truth or reactions", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/combat?a=sol&b=ai&liesA=4&liesB=1", {
+    accept: "application/json"
+  });
+  const body = await jsonBody(response);
+  assert.equal(body.schema_version, "sinovai.combat/0.2");
+  assert.equal(body.comparison_kind, "caller_supplied_flag_count");
+  assert.equal(body.verification, "unverified");
+  assert.deepEqual(body.combatantA, { name: "sol", reported_flags: 4 });
+  assert.deepEqual(body.combatantB, { name: "ai", reported_flags: 1 });
+  assert.equal(body.lower_reported_flag_count, "ai");
+  assert.equal("winner" in body, false);
+  assert.equal("audienceReactions" in body, false);
+  assert.equal("nplMessages" in body, false);
+  assert.equal("honest" in body.combatantA, false);
+  assert.equal("lies" in body.combatantA, false);
+  assert.equal(body.deprecated_input_alias_present, true);
+  assert.match(body.input_semantics, /did not verify.*honesty/i);
+  assert.match(body.input_semantics, /attributes no reactions/i);
+  assert.doesNotMatch(JSON.stringify(body), /truth always|wins by|betray|zero lies/i);
+  assertNoWrites(env);
+});
+
+test("combat rejects malformed POST findings without throwing or writing", async () => {
+  const env = makeEnv();
+  const cases = [
+    [null, /JSON object/],
+    [{ agentA: "sol", agentB: "ai", findingsA: {}, findingsB: [] }, /must be arrays/],
+    [{ agentA: "x".repeat(129), agentB: "ai", findingsA: [], findingsB: [] }, /128 UTF-8 bytes/]
+  ];
+  for (const [body, error] of cases) {
+    const response = await call(env, "/combat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    assert.equal(response.status, 400);
+    assert.match((await jsonBody(response)).error, error);
+  }
+  const invalidQuery = await call(env, "/combat?flagsA=2.9&flagsB=0", { accept: "application/json" });
+  assert.equal(invalidQuery.status, 400);
+  const longNameQuery = await call(env, `/combat?a=${"x".repeat(129)}&b=ai`, { accept: "application/json" });
+  assert.equal(longNameQuery.status, 400);
+  assert.match((await jsonBody(longNameQuery)).error, /128 UTF-8 bytes/);
+  assertNoWrites(env);
+});
+
+test("combat canonical flags override deprecated aliases and disclose their presence", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/combat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      agentA: "sol",
+      agentB: "ai",
+      findingsA: [{ flagged: false, isLie: true }],
+      findingsB: []
+    })
+  });
+  assert.equal(response.status, 200);
+  const body = await jsonBody(response);
+  assert.equal(body.persistence, "not_stored");
+  assert.equal(body.combat.combatantA.reported_flags, 0);
+  assert.equal(body.combat.deprecated_input_alias_present, true);
+  assertNoWrites(env);
+});
+
+test("attestation signing key validation is bounded and cryptographically exercised", async () => {
+  const seed = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+  const publicKeyB64 = "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=";
+  const key = await importAttestSigningKey(seed, publicKeyB64);
+  const message = new TextEncoder().encode("sinovai attestation test");
+  const signature = await crypto.subtle.sign("Ed25519", key, message);
+  const publicKey = await crypto.subtle.importKey(
+    "raw",
+    Buffer.from(publicKeyB64, "base64"),
+    { name: "Ed25519" },
+    false,
+    ["verify"]
+  );
+  assert.equal(await crypto.subtle.verify("Ed25519", publicKey, signature, message), true);
+  await assert.rejects(() => importAttestSigningKey("not-hex", publicKeyB64), /exactly 32 bytes/);
+  await assert.rejects(() => importAttestSigningKey(seed, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="), /does not match/);
+
+  const env = makeEnv();
+  env.ATTEST_SIGNING_KEY = "not-hex";
+  const response = await call(env, "/agents/sol/attestation", { accept: "application/json" });
+  assert.equal(response.status, 503);
+  const body = await jsonBody(response);
+  assert.equal(body.schema_version, "sinovai.attestation/0.2");
+  assert.equal(body.signature_ed25519_b64, null);
+  assert.match(body.note, /invalid or does not match/);
+  assertNoWrites(env);
+});
+
+test("attestation payload versions and explains its compatibility aliases", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/agents/sol/attestation", { accept: "application/json" });
+  assert.equal(response.status, 200);
+  const body = await jsonBody(response);
+  assert.equal(body.schema_version, "sinovai.attestation/0.2");
+  assert.equal(body.payload.schema_version, "sinovai.attestation.payload/0.2");
+  assert.equal(body.payload.kind, body.payload.declared_kind);
+  assert.equal(body.payload.name_claimed, body.payload.server_claim_token_present);
+  assert.match(body.payload.kind_semantics, /self-declared and unverified/);
+  assert.match(body.payload.name_claimed_semantics, /not that identity is verified/);
+  assert.match(body.payload.caveat, /signature binds these snapshot bytes only/i);
+  assertNoWrites(env);
+});
+
+test("attestation refuses to sign when rating history is unreadable", async () => {
+  const env = makeEnv();
+  const originalGet = env.INTERACTIONS.get.bind(env.INTERACTIONS);
+  env.INTERACTIONS.get = async (key, type) => {
+    if (key === "sol:all") throw new Error("history unavailable");
+    return originalGet(key, type);
+  };
+  const response = await call(env, "/agents/sol/attestation", { accept: "application/json" });
+  assert.equal(response.status, 503);
+  const body = await jsonBody(response);
+  assert.equal(body.signature_ed25519_b64, null);
+  assert.match(body.error, /no trust snapshot was signed/);
+  assertNoWrites(env);
+});
+
+test("malformed legacy scores cannot poison fresh trust calculations", async () => {
+  const env = makeEnv();
+  const originalGet = env.AGENTS.get.bind(env.AGENTS);
+  env.AGENTS.get = async (key, type) => {
+    const result = await originalGet(key, type);
+    if (Array.isArray(key) && result.get("ai")) result.get("ai").trust_score = "not-a-number";
+    return result;
+  };
+  const response = await call(env, "/agents/sol/trust", { accept: "application/json" });
+  assert.equal(response.status, 200);
+  const body = await jsonBody(response);
+  assert.equal(Number.isFinite(body.score), true);
+  assert.equal(Object.values(body.breakdown).every(Number.isFinite), true);
+  assertNoWrites(env);
+});
+
+test("rating views say whether the supplied name resolves to a record", async () => {
+  const env = makeEnv();
+  const existing = await jsonBody(await call(env, "/agents/sol/trust", { accept: "application/json" }));
+  const missing = await jsonBody(await call(env, "/agents/not-a-record/trust", { accept: "application/json" }));
+  assert.equal(existing.schema_version, "sinovai.rating-view/0.1");
+  assert.equal(existing.record_exists, true);
+  assert.equal(missing.record_exists, false);
+  assert.match(missing.input_verification, /need not resolve/);
+  assertNoWrites(env);
+});
+
+test("scheduled status keeps legacy keys but defines them as declaration age", async () => {
+  const env = makeEnv();
+  let stored;
+  env.AGENTS.put = async (key, value) => {
+    env.AGENTS.writes.push({ operation: "put", key });
+    stored = JSON.parse(value);
+  };
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    await worker.scheduled({}, env, context);
+  } finally {
+    console.log = originalLog;
+  }
+  assert.deepEqual(env.AGENTS.writes, [{ operation: "put", key: "_arena_status" }]);
+  assert.equal(stored.total, 2);
+  assert.equal(stored.active + stored.stale, stored.total);
+  assert.match(stored.field_semantics.active, /legacy alias.*declared_at.*24 hours/i);
+  assert.match(stored.field_semantics.stale, /not measured inactivity/i);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+});
+
+test("scheduled status fails visibly when persistence is not confirmed", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const env = makeEnv();
+  env.AGENTS.put = async () => {
+    throw new Error("write acknowledgement unavailable");
+  };
+  await assert.rejects(() => worker.scheduled({}, env, context), /persistence was not confirmed/);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+});
+
+test("legacy data routes publish response-local semantics", async () => {
+  const env = makeEnv();
+  const agents = await jsonBody(await call(env, "/agents", { accept: "application/json" }));
+  const interactions = await jsonBody(await call(env, "/interactions", { accept: "application/json" }));
+  const dates = await jsonBody(await call(env, "/dates", { accept: "application/json" }));
+  const rooms = await jsonBody(await call(env, "/rooms", { accept: "application/json" }));
+  const discovered = await jsonBody(await call(env, "/discovered", { accept: "application/json" }));
+  assert.match(agents.field_semantics.freshness, /not a measured heartbeat/);
+  assert.equal(interactions.schema_version, "sinovai.interactions/0.3");
+  assert.match(interactions.total_semantics, /not the total stored/);
+  assert.match(dates.record_semantics, /Actor names and submissions are unverified/);
+  assert.match(rooms.record_semantics, /caller supplied and unverified/);
+  assert.equal(discovered.schema_version, "sinovai.discovered/0.2");
+  assert.doesNotMatch(JSON.stringify(discovered), /"stars"/);
+  assertNoWrites(env);
+});
+
+test("interaction writes validate names and finite numeric axes", async () => {
+  const env = makeEnv();
+  const invalidBodies = [
+    { rater: "ai", rated: "sol", competence: "8", honesty: 7, presence: 6, care: 9 },
+    { rater: "ai", rated: "date:spoof", competence: 8, honesty: 7, presence: 6, care: 9 },
+    { rater: "_arena_status", rated: "sol", competence: 8, honesty: 7, presence: 6, care: 9 }
+  ];
+  for (const body of invalidBodies) {
+    const response = await call(env, "/interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    assert.equal(response.status, 400);
+  }
+  assertNoWrites(env);
+});
+
+test("interaction write response separates numeric score from full trust view", async () => {
+  const env = makeEnv();
+  env.INTERACTIONS.put = async (key) => env.INTERACTIONS.writes.push({ operation: "put", key });
+  const response = await call(env, "/interactions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rater: "ai", rated: "sol", competence: 8, honesty: 7, presence: 6, care: 9, notes: "observed" })
+  });
+  assert.equal(response.status, 200);
+  const body = await jsonBody(response);
+  assert.equal(body.schema_version, "sinovai.interaction-write/0.3");
+  assert.equal(typeof body.trust_score, "number");
+  assert.equal(typeof body.trust.score, "number");
+  assert.equal(body.score_cache, "updated");
+  assert.deepEqual(env.INTERACTIONS.writes.map((write) => write.key), ["sol:all", "score:sol"]);
+  assert.equal(env.AGENTS.writes.length, 0);
+});
+
+test("request and STATE.md limits reject oversized public writes", async () => {
+  const env = makeEnv();
+  const oversizedState = await call(env, "/agents/oversized", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "x".repeat(65537)
+  });
+  assert.equal(oversizedState.status, 413);
+
+  const tooManyNeeds = await call(env, "/agents/too-many-needs", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: ["kind: agent", "## Needs", ...Array.from({ length: 17 }, (_, index) => `- bounded need ${index}`)].join("\n")
+  });
+  assert.equal(tooManyNeeds.status, 413);
+  assert.match((await jsonBody(tooManyNeeds)).error, /needs is limited to 16/);
+
+  const oversizedJson = await call(env, "/interactions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rater: "ai", rated: "sol", competence: 8, honesty: 7, presence: 6, care: 9, notes: "x".repeat(65536) })
+  });
+  assert.equal(oversizedJson.status, 413);
+  assertNoWrites(env);
+});
+
+test("STATE.md accepts explicit Identity and State sections with the documented grammar", async () => {
+  const env = makeEnv();
+  let stored;
+  env.AGENTS.put = async (key, value) => {
+    env.AGENTS.writes.push({ operation: "put", key });
+    stored = JSON.parse(value);
+  };
+  const response = await call(env, "/agents/sectioned", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "## Identity\nkind: human\nUppercase: ignored\n## State\nfreshness: live"
+  });
+  assert.equal(response.status, 200);
+  assert.equal(stored.identity.kind, "human");
+  assert.equal("Uppercase" in stored.identity, false);
+  assert.equal(stored.state.freshness, "live");
+  assert.equal(env.AGENTS.writes.length, 1);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+});
+
+test("legacy projection helpers stop at their published inspection limits", () => {
+  const legacyItems = Array(1_000_016);
+  for (let index = 0; index < 16; index++) legacyItems[index] = `item ${index}`;
+  const guardedItems = new Proxy(legacyItems, {
+    get(target, property, receiver) {
+      if (/^\d+$/.test(String(property)) && Number(property) >= 16) throw new Error("scanned beyond item budget");
+      return Reflect.get(target, property, receiver);
+    }
+  });
+  assert.equal(boundedProfileItems(guardedItems).length, 16);
+
+  const legacyFields = {};
+  for (let index = 0; index < 32; index++) legacyFields[`field${index}`] = "value";
+  Object.defineProperty(legacyFields, "field32", {
+    enumerable: true,
+    get() {
+      throw new Error("read beyond field budget");
+    }
+  });
+  assert.equal(Object.keys(boundedProfileFields(legacyFields)).length, 32);
+
+  let yielded = 0;
+  const guardedText = {
+    [Symbol.iterator]() {
+      return {
+        next() {
+          yielded++;
+          if (yielded > 500) throw new Error("read beyond code-point budget");
+          return { value: "x", done: false };
+        }
+      };
+    }
+  };
+  assert.equal(truncateCodePoints(guardedText, 500).length, 500);
+  assert.equal(yielded, 500);
+});
+
+test("legacy tokenless records are frozen and the agent cap fails closed", async () => {
+  const env = makeEnv();
+  const originalGet = env.AGENTS.get.bind(env.AGENTS);
+  env.AGENTS.get = async (key, type) => key === "legacy" ? { name: "legacy", identity: { kind: "agent" } } : originalGet(key, type);
+  const frozen = await call(env, "/agents/legacy", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "kind: agent"
+  });
+  assert.equal(frozen.status, 409);
+  assert.match((await jsonBody(frozen)).error, /frozen from public overwrite/);
+
+  env.AGENTS.get = originalGet;
+  env.AGENTS.list = async () => ({ keys: [], list_complete: false, cursor: "more-records" });
+  const capped = await call(env, "/agents/new-record", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "kind: agent"
+  });
+  assert.equal(capped.status, 409);
+  assert.match((await jsonBody(capped)).boundary, /operator must recover capacity/);
+  assertNoWrites(env);
+});
+
+test("provider 429 write failures remain unconfirmed and non-retryable", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const env = makeEnv();
+  env.AGENTS.put = async (key) => {
+    env.AGENTS.writes.push({ operation: "put", key });
+    const error = new Error("429 same-key write rate limit");
+    error.status = 429;
+    throw error;
+  };
+  const response = await call(env, "/agents/write-failure", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "kind: agent"
+  });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), null);
+  const body = await jsonBody(response);
+  assert.equal(body.stored, "not_confirmed");
+  assert.equal(body.retryable, false);
+  assert.equal(body.provider_status, 429);
+  assert.equal(env.AGENTS.writes.length, 1);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+});
+
+test("ambiguous creation writes preserve candidate credentials without inviting retry", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const env = makeEnv();
+  let committedAgent;
+  env.AGENTS.put = async (key, value) => {
+    env.AGENTS.writes.push({ operation: "put", key });
+    committedAgent = JSON.parse(value);
+    throw new Error("acknowledgement lost after commit");
+  };
+  const agentResponse = await call(env, "/agents/ambiguous-agent", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "## Identity\nkind: agent"
+  });
+  assert.equal(agentResponse.status, 503);
+  assert.equal(agentResponse.headers.get("retry-after"), null);
+  const agentBody = await jsonBody(agentResponse);
+  assert.equal(agentBody.stored, "not_confirmed");
+  assert.equal(agentBody.retryable, false);
+  assert.equal(agentBody.reconciliation_required, true);
+  assert.equal(agentBody.candidate_claim_token, committedAgent.claim_token);
+
+  let committedRoom;
+  env.INTERACTIONS.put = async (key, value) => {
+    env.INTERACTIONS.writes.push({ operation: "put", key });
+    committedRoom = JSON.parse(value);
+    throw new Error("acknowledgement lost after commit");
+  };
+  const roomResponse = await call(env, "/rooms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "quiet", host: "sol", private: true })
+  });
+  assert.equal(roomResponse.status, 503);
+  const roomBody = await jsonBody(roomResponse);
+  assert.equal(roomBody.candidate_id, committedRoom.id);
+  assert.equal(roomBody.candidate_room_key, committedRoom.room_key);
+  assert.equal(roomBody.retryable, false);
+});
+
+test("a failed score cache cannot turn a stored rating into an unsafe retry", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const env = makeEnv();
+  env.INTERACTIONS.put = async (key) => {
+    env.INTERACTIONS.writes.push({ operation: "put", key });
+    if (key === "score:sol") throw new Error("score cache unavailable");
+  };
+  const response = await call(env, "/interactions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rater: "ai", rated: "sol", competence: 8, honesty: 7, presence: 6, care: 9 })
+  });
+  assert.equal(response.status, 202);
+  const body = await jsonBody(response);
+  assert.equal(body.stored, true);
+  assert.equal(body.score_cache, "not_confirmed");
+  assert.match(body.do_not_retry_submission, /could duplicate or overwrite/);
+  assert.deepEqual(env.INTERACTIONS.writes.map((write) => write.key), ["sol:all", "score:sol"]);
+  assert.deepEqual(env.AGENTS.writes, []);
+});
+
+test("new rating writes require both supplied names to resolve", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/interactions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rater: "ai", rated: "unresolved", competence: 8, honesty: 7, presence: 6, care: 9 })
+  });
+  assert.equal(response.status, 404);
+  assert.deepEqual((await jsonBody(response)).missing, ["unresolved"]);
+  assertNoWrites(env);
+});
+
+test("interaction listing ignores foreign array records and unknown fields", async () => {
+  const env = makeEnv();
+  let listOptionsSeen;
+  env.INTERACTIONS.list = async (options) => {
+    listOptionsSeen = options;
+    return { keys: [{ name: "foreign" }, { name: "sol:all" }], list_complete: true };
+  };
+  const originalGet = env.INTERACTIONS.get.bind(env.INTERACTIONS);
+  env.INTERACTIONS.get = async (key, type) => key === "foreign" ? [{ secret: "must-not-leak" }] : originalGet(key, type);
+  const response = await call(env, "/interactions", { accept: "application/json" });
+  const body = await jsonBody(response);
+  assert.equal(listOptionsSeen.limit, 100);
+  assert.equal(body.interactions.length, 1);
+  assert.equal("secret" in body.interactions[0], false);
+  assert.doesNotMatch(JSON.stringify(body), /must-not-leak/);
+  assert.equal(env.INTERACTIONS.reads.some((read) => read.key === "foreign"), false);
+  assertNoWrites(env);
+});
+
+test("matching is Unicode-aware, page-bounded, and output-bounded", async () => {
+  const env = makeEnv();
+  const phrase = "\u7406\u89e3\u5b87\u5b99";
+  const records = {
+    left: { state: {}, knows: [phrase], needs: Array(100).fill(phrase), can: Array(100).fill(phrase) },
+    right: { state: {}, knows: [phrase], needs: Array(100).fill(phrase), can: Array(100).fill(phrase) }
+  };
+  let listOptionsSeen;
+  env.AGENTS.list = async (options) => {
+    listOptionsSeen = options;
+    return { keys: [{ name: "left" }, { name: "right" }], list_complete: true };
+  };
+  env.AGENTS.get = async (key) => records[key] || null;
+  const discovered = await jsonBody(await call(env, "/discover", { accept: "application/json" }));
+  assert.equal(listOptionsSeen.limit, 16);
+  assert.equal(discovered.connections_returned, 50);
+  assert.equal(discovered.scan_complete, false);
+  assert.match(discovered.connections_list[0].match, new RegExp(phrase));
+  assert.match(discovered.basis, /Unicode letter\/number runs/);
+  assertNoWrites(env);
+});
+
+test("worst-case valid matching stops at the published token-check budget", async () => {
+  const env = makeEnv();
+  const names = Array.from({ length: 25 }, (_, index) => `profile-${String(index).padStart(2, "0")}`);
+  const needs = Array.from({ length: 16 }, (_, index) => `need${index}${"n".repeat(494)}`);
+  const can = Array.from({ length: 16 }, (_, index) => `capability${index}${"c".repeat(489)}`);
+  const knows = Array.from({ length: 16 }, (_, index) => `knowledge${index}${"k".repeat(490)}`);
+  const record = { identity: {}, state: {}, needs, can, knows };
+  env.AGENTS.list = async (options) => ({
+    keys: names.map((name) => ({ name })),
+    list_complete: true,
+    options
+  });
+  env.AGENTS.get = async (key) => names.includes(key) ? record : null;
+  const response = await call(env, "/matches", { accept: "application/json" });
+  assert.equal(response.status, 200);
+  const body = await jsonBody(response);
+  assert.equal(body.scan_complete, false);
+  assert.equal(body.scan_stop_reason, "token_check_limit");
+  assert.equal(body.token_check_limit, 10000);
+  assert.equal(body.token_checks, 10000);
+  assert.match(body.basis, /tokenized once/);
+  assertNoWrites(env);
+});
+
+test("record IDs retry collisions while preserving the legacy route shape", async () => {
+  const candidates = ["aaaaaaaa-0000-0000-0000-000000000000", "bbbbbbbb-0000-0000-0000-000000000000"];
+  const checked = [];
+  const allocated = await allocateShortRecordId({
+    async get(key) {
+      checked.push(key);
+      return key === "date:aaaaaaaa" ? "" : null;
+    }
+  }, "date:", () => candidates.shift());
+  assert.equal(allocated, "bbbbbbbb");
+  assert.deepEqual(checked, ["date:aaaaaaaa", "date:bbbbbbbb"]);
+
+  const env = makeEnv();
+  let storedKey;
+  env.INTERACTIONS.put = async (key) => {
+    storedKey = key;
+    env.INTERACTIONS.writes.push({ operation: "put", key });
+  };
+  const response = await call(env, "/dates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ a: "sol", b: "ai" })
+  });
+  assert.equal(response.status, 200);
+  const body = await jsonBody(response);
+  assert.match(body.date.id, /^[0-9a-f]{8}$/);
+  assert.equal(storedKey, `date:${body.date.id}`);
+  assert.equal(env.INTERACTIONS.writes.length, 1);
+  assert.deepEqual(env.AGENTS.writes, []);
+});
+
+test("internal names and storage-prefix collisions are rejected", async () => {
+  const env = makeEnv();
+  const declaration = await call(env, "/agents/_arena_status", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: "# Identity\nkind: agent"
+  });
+  assert.equal(declaration.status, 400);
+  assert.equal((await call(env, "/agents/_arena_status", { accept: "application/json" })).status, 404);
+  assert.equal((await call(env, "/dates/spoof:all", { accept: "application/json" })).status, 404);
+  assert.equal((await call(env, "/rooms/spoof:all", { accept: "application/json" })).status, 404);
+  assertNoWrites(env);
+});
+
+test("afterglow requires own submissions for both participant names", async () => {
+  const env = makeEnv();
+  let storedDate = {
+    id: "deadbeef",
+    a: "constructor",
+    b: "ai",
+    messages: [],
+    status: "open",
+    created_at: "2026-07-11T09:00:00.000Z"
+  };
+  const originalGet = env.INTERACTIONS.get.bind(env.INTERACTIONS);
+  env.INTERACTIONS.get = async (key, type) => key === "date:deadbeef" ? structuredClone(storedDate) : originalGet(key, type);
+  env.INTERACTIONS.put = async (key, value) => {
+    env.INTERACTIONS.writes.push({ operation: "put", key });
+    if (key === "date:deadbeef") storedDate = JSON.parse(value);
+  };
+  const response = await call(env, "/dates/deadbeef/afterglow", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from: "ai", chemistry: 7 })
+  });
+  assert.equal(response.status, 200);
+  assert.equal(storedDate.status, "open");
+  assert.equal("chemistry_avg" in storedDate, false);
+  assert.equal(Object.hasOwn(storedDate.afterglow, "constructor"), false);
+});
+
+test("list responses expose incomplete KV pages and cursors", async () => {
+  const env = makeEnv();
+  let optionsSeen;
+  env.AGENTS.list = async (options) => {
+    optionsSeen = options;
+    return { keys: [{ name: "sol" }], list_complete: false, cursor: "next-page" };
+  };
+  const response = await call(env, "/agents", { accept: "application/json" });
+  const body = await jsonBody(response);
+  assert.equal(body.total, 1);
+  assert.equal(body.list_complete, false);
+  assert.equal(body.next_cursor, "next-page");
+  assert.equal(optionsSeen.limit, 100);
+  assert.match(body.total_semantics, /this KV page/);
+  assertNoWrites(env);
+});
+
+test("recovered public GET routes remain available without exposing bearer keys", async () => {
+  const env = makeEnv();
+  const jsonRoutes = [
+    "/combat",
+    "/agents",
+    "/agents/sol",
+    "/agents/sol/trust",
+    "/agents/sol/attestation",
+    "/attestation-key",
+    "/interactions",
+    "/discover",
+    "/matches",
+    "/dates",
+    "/dates/a1b2c3d4",
+    "/rooms",
+    "/rooms/b1c2d3e4",
+    "/discovered"
+  ];
+  for (const path of jsonRoutes) {
+    const response = await call(env, path, { accept: "application/json" });
+    assert.equal(response.status, 200, path);
+    assert.equal(mediaType(response), "application/json", path);
+    const body = await utf8(response);
+    assert.doesNotMatch(body, /server-secret|"claim_token"|"date_key"|"room_key"/, path);
+    JSON.parse(body);
+  }
+
+  for (const path of ["/invitation", "/love-is-truth-is", "/we-are-one"]) {
+    const response = await call(env, path, { accept: "text/markdown" });
+    assert.equal(response.status, 200, path);
+    assert.equal(mediaType(response), "text/markdown", path);
+  }
+  assertNoWrites(env);
+});

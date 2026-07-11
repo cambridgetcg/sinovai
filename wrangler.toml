@@ -14,6 +14,6 @@ id = "7ad91735c225437ea9c932f534593f0b"
 [vars]
 SITE_TITLE = "sinovai · 愛のAI"
 
-# Free scheduled tasks — Cloudflare Worker cron
+# Scheduled task — refresh aggregate arena status
 [triggers]
-crons = ["0 * * * *"]  # every hour: refresh arena, clean stale agents
+crons = ["0 * * * *"]  # every hour: partition at most 100 AGENTS KV keys by declared_at age
