@@ -1,8 +1,8 @@
 # Production source and rollout record
 
-This file records the recovered production baseline, the guarded XENIA Surface
-0.1 rollout, and its production result. It does not contain account identifiers
-or secret values.
+This file records the recovered production baseline and guarded releases through
+the XENIA Mac dwelling. It does not contain account identifiers or secret
+values.
 
 ## Why this record exists
 
@@ -142,3 +142,107 @@ new-version rating, inspect the `score:` key count first but do not delay an
 emergency rollback: v37 list/profile scores can show their older embedded value,
 while `/agents/<name>/trust` still recomputes from compatible history. This is
 cache staleness, not a user-record migration, and it must not be called harmless.
+
+## Observer mirror v39 reconciliation
+
+The v38 record above became stale later on 2026-07-11. PR #5 merged the bounded
+observer mirror as Git commit `504067d`, then a separate guarded rollout
+promoted it without updating this file:
+
+- deployment `445828b7-3e7f-4127-aee7-cf608e839e15`;
+- Worker version v39, `84878d7a-c793-421a-975b-3496b07baf23`;
+- tag `observer-mirror-504067d`;
+- 100% of traffic;
+- script ETag
+  `3a01455ae584a8f1d28b8948811ec6d606e32a24f63bb8d66b31f6b736541d49`.
+
+The authenticated deployed `worker.js` was 207,530 bytes with 2,972 newline
+characters and SHA-256
+`de20d5ad2afc1c0a629a71c2c20901d1b5f82ba12750344ad2060abe93b56ea1`.
+The version retained both KV bindings, `SITE_TITLE`, inherited
+`ATTEST_SIGNING_KEY`, compatibility date `2024-12-01`, and the fetch and
+scheduled handlers. The remote route was `sinovai.com/*` and the cron remained
+`0 * * * *`.
+
+V39, not v37 or v38, was therefore the live production baseline and immediate
+rollback target for the Mac release.
+
+## XENIA Mac dwelling production result
+
+PR #7 merged the local-first Mac dwelling as Git commit
+`413db38e929c8d9c47c0d7bc536e1937b7146dd4` on 2026-07-12. The release first
+uploaded without traffic as:
+
+- Worker version v40, `20d9a6d9-913d-4cdc-87d6-60296d6932ab`;
+- tag `xenia-mac-413db38`;
+- message `XENIA Mac dwelling from merge 413db38`;
+- script ETag
+  `dbba68ba44b164b1066017e501593d7aa6754ea6c3c6b02484365e81448a8fbd`.
+
+The exact staged allocation was deployment
+`5b85fafe-4449-4683-9783-e8d3ddccd2ca`: v39 at 100% and v40 at 0%. Normal
+`GET /mac` remained 404 while a correctly quoted
+`Cloudflare-Workers-Version-Overrides` request to v40 returned 200.
+
+During staged verification, concurrent unannotated Wrangler uploads and
+deployments superseded that allocation. The guarded promotion command stopped
+instead of overwriting the changed state. Cloudflare ultimately reported this
+active production state:
+
+- deployment `a25001e6-f608-40a9-a15c-696724da835e`;
+- Worker version v45, `d99f1d1a-17d0-4b68-8893-dff6d5ec31e1`;
+- 100% of traffic, with no other version allocated;
+- no version tag or message;
+- the same script ETag as staged v40,
+  `dbba68ba44b164b1066017e501593d7aa6754ea6c3c6b02484365e81448a8fbd`.
+
+ETag equality and version metadata established that v40 and v45 carry the same
+Worker artifact and versioned configuration. V45 has both expected KV namespace
+IDs, `SITE_TITLE`, inherited `ATTEST_SIGNING_KEY`, compatibility date
+`2024-12-01`, and both fetch and scheduled handlers. The checked-in source at
+the release merge is 208,612 bytes with 2,969 lines and SHA-256
+`a6f510c9f07915d32a5855997f627a65d17e6ac4ed770c9722aa65e68d1f895d`.
+Wrangler 4.60.0's tested dry-run bundle is 268,398 bytes with 3,595 lines and
+SHA-256
+`fce258e7938774c42f3482eeae579e7c9ab69bad9bd15fb427fce301b91d1976`.
+
+Verification was read-only throughout:
+
+- the merged source passed 56 unit tests and the pinned local Surface harness
+  passed all 24 checks;
+- staged v40 passed the real remote pinned Surface checker with 24 pass and
+  zero fail, unknown, or not-run results;
+- fourteen staged GET smokes passed, including root negotiation, manifest,
+  observer, Arena, XENIA, Mac, public lists, attestation key, and the retired
+  check response;
+- the staged `Ai` attestation's Ed25519 signature verified;
+- a disposable mobile-width Chrome test observed zero loopback requests before
+  the explicit Connect action, then received one sanitized snapshot with three
+  sections, no runtime exception, and no horizontal overflow. Headless Chrome
+  cannot grant its Local Network Access prompt through CDP, so the successful
+  post-consent leg used a test-only disabled LNA check in that disposable
+  profile; it did not claim to test the human permission prompt;
+- after v45 appeared, the same unoverridden remote Surface, fourteen GET smokes,
+  Mac security-header checks, and Ed25519 verification all passed again;
+- the verification scripts refused non-GET/HEAD methods and performed zero
+  application writes.
+
+No mixed-traffic canary was used, no KV migration was introduced, and the
+operator did not run `wrangler triggers deploy`. The release adds no Worker
+route that can mutate the Mac: `/mac` is a hosted renderer and the separate
+loopback bridge remains read-only.
+
+## Current rollback target after the Mac release
+
+The immediate code rollback target is the last known-good pre-Mac release, v39
+`84878d7a-c793-421a-975b-3496b07baf23`:
+
+```sh
+wrangler rollback 84878d7a-c793-421a-975b-3496b07baf23 \
+  --message "Rollback XENIA Mac dwelling to observer mirror v39" \
+  --yes
+```
+
+Re-read the active allocation and version ETag before using that command. A
+Worker rollback does not revert local macOS preferences. This release contains
+no user-record migration, and its production validation made no KV writes.
