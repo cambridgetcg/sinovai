@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "mac:bridge": "node macos/bridge.mjs",
     "test": "node --test test/*.test.mjs",
     "test:surface": "node test/surface-conformance.mjs"
+  },
+  "dependencies": {
+    "@agenttool/xenia": "0.1.0-beta.3"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

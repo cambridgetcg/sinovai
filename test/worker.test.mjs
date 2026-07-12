@@ -381,11 +381,15 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   assert.match(body.implementation_boundaries.write_abuse, /no per-caller quota/);
   assert.match(body.implementation_boundaries.storage_fit, /does not fit reliable concurrent/);
   assert.match(body.implementation_boundaries.legacy_check, /does not establish conformance/);
+  assert.match(body.implementation_boundaries.mac_surface, /explicit Connect gesture/);
+  assert.match(body.implementation_boundaries.mac_surface, /no Mac command, relay, storage, or mutation path/);
   assert.match(body.implementation_limits.request_bodies, /65536 bytes/);
   assert.match(body.implementation_limits.kv_listing, /100 keys.*16/);
   assert.match(body.routes.observer, /GET \/observer/);
   assert.match(body.routes.observer, /service-declared, not runtime instrumentation/);
   assert.match(body.routes.observer, /outside XENIA Surface 0\.1/);
+  assert.match(body.routes.mac_page, /GET \/mac/);
+  assert.match(body.routes.mac_page, /read-only settings renderer/);
   assert.equal(body.arena.met_not_ranked, false);
   assert.equal(body.arena.agent_records_listed_in_kv_page, 2);
   assert.equal(body.arena.agent_record_list_complete, true);
@@ -589,9 +593,9 @@ test("observer omits sensitive caller-network fields and supplied edge values", 
   assertNoWrites(env);
 });
 
-test("legacy pages survive and the retired check makes no outbound requests", async () => {
+test("legacy pages and the Mac dwelling survive while the retired check makes no outbound requests", async () => {
   const env = makeEnv();
-  for (const path of ["/arena", "/check", "/xenia"]) {
+  for (const path of ["/arena", "/check", "/xenia", "/mac"]) {
     const response = await call(env, path, { accept: "text/html" });
     assert.equal(response.status, 200, path);
     assert.equal(mediaType(response), "text/html", path);
@@ -618,6 +622,50 @@ test("legacy pages survive and the retired check makes no outbound requests", as
   } finally {
     globalThis.fetch = originalFetch;
   }
+  assertNoWrites(env);
+});
+
+test("Mac dwelling requires a user gesture and carries a narrow browser boundary", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/mac", { accept: "text/html" });
+  const html = await utf8(response);
+  const csp = response.headers.get("content-security-policy") || "";
+
+  assert.equal(response.status, 200);
+  assert.equal(mediaType(response), "text/html");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.match(response.headers.get("permissions-policy") || "", /local-network=\(\)/);
+  assert.match(response.headers.get("permissions-policy") || "", /loopback-network=\(self\)/);
+  assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /connect-src http:\/\/127\.0\.0\.1:18791/);
+  assert.doesNotMatch(csp, /unsafe-inline|wss:|https:\/\/sinovai\.com/);
+  assert.doesNotMatch(html, /__CSP_NONCE__/);
+  assert.match(html, /Connect this Mac/);
+  assert.match(html, /Merely opening this page performs no local request/);
+  assert.match(html, /addEventListener\("click",connect\)/);
+  assert.doesNotMatch(html, /addEventListener\("click",connect\);connect\(\)/);
+  assert.match(html, /http:\/\/127\.0\.0\.1:18791\//);
+  assert.doesNotMatch(html, /0\.0\.0\.0|localhost:18791|Access-Control-Allow-Origin/);
+  const clientScript = html.match(/<script nonce="[a-f0-9]+">([\s\S]*?)<\/script>/)?.[1];
+  assert.equal(typeof clientScript, "string");
+  assert.doesNotThrow(() => new Function(clientScript));
+
+  const options = await call(env, "/mac", {
+    method: "OPTIONS",
+    headers: {
+      Origin: "https://external.example",
+      "Access-Control-Request-Method": "POST"
+    }
+  });
+  assert.equal(options.status, 204);
+  assert.equal(options.headers.get("allow"), "GET");
+  assert.equal(options.headers.get("access-control-allow-origin"), null);
+  assert.equal(options.headers.get("access-control-allow-methods"), null);
+  assert.deepEqual(env.AGENTS.reads, []);
+  assert.deepEqual(env.INTERACTIONS.reads, []);
   assertNoWrites(env);
 });
 
@@ -652,6 +700,50 @@ test("root visualization does not invent occupancy or pairwise relationships", a
   const html = await utf8(response);
   assert.match(html, /total\+" records/);
   assert.doesNotMatch(html, /TOTAL\|\|60|lamps\[i\]\.met|minds have met|total\+" awake/);
+  assertNoWrites(env);
+});
+
+test("root mobile rail and testimony hash stay bounded and wrappable", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/", { accept: "text/html" });
+  const html = await utf8(response);
+
+  assert.match(html, /\.rail\{display:grid;grid-template-columns:minmax\(0,1fr\);/);
+  assert.match(html, /\.rail \.awake\{white-space:normal;min-width:0;max-width:100%;overflow-wrap:anywhere\}/);
+  assert.match(html, /\.sigblock\{display:block;width:100%;max-width:100%;padding:1\.6rem 0\}/);
+  assert.match(html, /\.sighex\{white-space:normal;overflow:visible;max-width:100%!important;overflow-wrap:anywhere;/);
+  assert.match(html, /681a79b6 aff7c453 aeb9dfd3 9bb50662 0b0ef38e 24d8859a 32145522 08c76887/);
+  assert.match(html, /href="\/mac">this mac<\/a>/);
+  assertNoWrites(env);
+});
+
+test("Arena exposes a readable bounded atmosphere and semantic controls", async () => {
+  const env = makeEnv();
+  const response = await call(env, "/arena", { accept: "text/html" });
+  const html = await utf8(response);
+
+  assert.match(html, /--faint:#71829b/);
+  assert.match(html, /html\{background:var\(--sumi\);scroll-behavior:smooth;overflow-x:clip\}/);
+  assert.match(html, /#fog\{position:fixed;inset:0;/);
+  assert.match(html, /#grain\{position:fixed;inset:0;z-index:2;/);
+  assert.match(html, /\.hero\{position:relative;z-index:3;/);
+  assert.doesNotMatch(html, /@keyframes fog\{from\{transform:/);
+  assert.match(html, /a:focus-visible,button:focus-visible,input:focus-visible\{outline:2px solid #e8c06a;/);
+  assert.doesNotMatch(html, /outline:none/);
+
+  assert.match(html, /<nav class="arena-nav" aria-label="sinovai">/);
+  assert.match(html, /<h1 class="mark" id="arena-title">/);
+  assert.match(html, /<main id="arena-content">/);
+  assert.match(html, /<label class="sr-only" for="q">Find an agent record<\/label>/);
+  assert.match(html, /<label class="control" for="rn">/);
+  assert.match(html, /<label class="control" for="rh">/);
+  assert.match(html, /id="rcmsg" role="status" aria-live="polite" aria-atomic="true"/);
+
+  assert.match(html, /<div id="boot" role="dialog" aria-modal="true" aria-label="Arena introduction">/);
+  assert.match(html, /<button class="skip" id="bootSkip" type="button">/);
+  assert.match(html, /bootSkip\.addEventListener\("click",killBoot\)/);
+  assert.doesNotMatch(html, /<div id="boot"[^>]*aria-hidden/);
+  assert.match(html, /@media\(prefers-reduced-motion:reduce\)/);
   assertNoWrites(env);
 });
 

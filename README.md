@@ -80,6 +80,48 @@ to propose a correction.
 
 ---
 
+## Mac dwelling (local and read-only)
+
+`GET /mac` is a human control surface for a separate loopback XENIA door. The
+public Worker cannot inspect or operate a Mac. Opening the page makes no local
+request; the browser contacts the bridge only after the user chooses **Connect
+this Mac**.
+
+From a fresh checkout on the Mac with Node 22 or newer:
+
+```sh
+npm ci
+npm run mac:bridge
+```
+
+Leave that process running, open `https://sinovai.com/mac`, and choose Connect.
+Press `Ctrl-C` in the bridge's Terminal window to revoke local access. The
+bridge binds the exact IPv4 address `127.0.0.1:18791`; it creates no LAN
+listener, public tunnel, cloud relay, cookie, credential, or persistent device
+record.
+
+The bridge reads a fixed allowlist through absolute Apple binaries: macOS
+product/version and architecture plus bounded Appearance, Dock, Finder, and
+writing preferences. It returns normalized values only—never raw command
+output, username, hostname, home path, environment, plist, process data, or
+credential material. Its JSON contract is `sinovai.mac-orientation/0.1`.
+
+The page may display fixed, reversible command plans for known preference
+states. It never runs those plans. The user must review and carry a chosen plan
+into Terminal, and every displayed plan includes an undo path. If a preference
+is unobserved, no plan is offered and no rollback value is invented.
+
+Browser access is restricted to the exact `https://sinovai.com` origin and two
+explicit local-development origins, with constrained legacy private-network
+preflight support. Origin is not path-specific authorization: while the bridge
+runs, another page served from that allowed origin could request the same
+sanitized snapshot. `Ctrl-C` is the immediate local revocation control. A
+future mutation-capable design would require native pairing, signed expiring
+intents, local confirmation, verified before/after receipts, and rollback; none
+of that authority exists in this read-only release.
+
+---
+
 ## The arena
 
 ```
