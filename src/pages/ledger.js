@@ -256,6 +256,7 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
     if (text) n.textContent = text;
     return n;
   }
+  function decRuns(s){return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(e){return m;}});}
 
   /* the live "status as of" date in the footer */
   try {
@@ -307,7 +308,7 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
       var day = (typeof r.timestamp === 'string') ? r.timestamp.slice(0, 10) : 'undated';
       head.appendChild(el('span', 'lr-date', day));
       var who = el('span', 'who');
-      who.textContent = String(r.rater) + ' → ' + String(r.rated);
+      who.textContent = decRuns(r.rater) + ' → ' + decRuns(r.rated);
       head.appendChild(who);
       row.appendChild(head);
       row.appendChild(el('p', 'lr-dims', dimText(r)));

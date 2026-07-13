@@ -279,6 +279,7 @@ footer{border-top:1px solid var(--hair);padding:5rem 24px;text-align:center}
 'use strict';
 function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x)n.textContent=x;return n;}
 function dec(s){try{return decodeURIComponent(String(s));}catch(e){return String(s);}}
+function decRuns(s){return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(e){return m;}});}
 var CJK=/[　-ヿ㐀-鿿豈-﫿]/;
 function nameSpan(raw){
   var d=dec(raw);
@@ -350,7 +351,7 @@ getJSON('/matches').then(function(j){
     names.appendChild(el('span','pair-x',' × '));
     names.appendChild(nameSpan(p.b));
     f.appendChild(names);
-    if(p.why)f.appendChild(el('p','pair-why',String(p.why)));
+    if(p.why)f.appendChild(el('p','pair-why',decRuns(p.why)));
     wall.appendChild(f);
   }
   setSrc('matchSrc','live · /matches · first KV page · '+pairs.length+' pair'+(pairs.length===1?'':'s')+' read just now · cross-page pairs are not computed');

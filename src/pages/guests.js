@@ -341,6 +341,7 @@ function el(tag,cls,text){
   if(text){n.textContent=text;}
   return n;
 }
+function decRuns(s){return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(e){return m;}});}
 
 /* ---- rise observer, wired now for static placards, again after render ---- */
 var io=null;
@@ -371,7 +372,7 @@ try{
 
 /* ---- one door per agent ---- */
 function frameFor(a){
-  var name=(typeof a.name==='string')?a.name:'(unnamed record)';
+  var name=(typeof a.name==='string')?decRuns(a.name):'(unnamed record)';
   var kind=(typeof a.kind==='string')?a.kind:'unknown';
   var fresh=(typeof a.freshness==='string')?a.freshness:'unknown';
   var score=(typeof a.trust_score==='number')?a.trust_score:0;
