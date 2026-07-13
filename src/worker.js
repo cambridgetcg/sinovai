@@ -261,7 +261,7 @@ function normalizeInteraction(value) {
   const { rater, rated, competence, honesty, presence, care, notes, timestamp } = value;
   if (storedNameError(rater) || storedNameError(rated)) return null;
   if (![competence, honesty, presence, care].every((score) => typeof score === "number" && Number.isFinite(score))) return null;
-  return {
+  const interaction = {
     rater,
     rated,
     competence: Math.min(10, Math.max(0, competence)),
@@ -271,6 +271,8 @@ function normalizeInteraction(value) {
     notes: truncateCodePoints(typeof notes === "string" ? notes : "", 2e3),
     timestamp: truncateCodePoints(typeof timestamp === "string" ? timestamp : "", 100)
   };
+  if (value.signed === true) interaction.signed = true;
+  return interaction;
 }
 __name(normalizeInteraction, "normalizeInteraction");
 function normalizeInteractions(value, ratedName) {
@@ -1311,7 +1313,7 @@ async function handleRequest(request, env) {
       interactions,
       trust: computeTrustScore(interactions, weights),
       cached_trust_score_semantics: "agent.trust_score and interaction_count use a separate best-effort cache when available, then fall back to legacy profile fields; trust.score is freshly recomputed and may differ",
-      input_verification: "self-declared profile plus unverified actor names, rating authorship, notes, and evidence"
+      input_verification: "self-declared profile plus unverified actor names, rating authorship, notes, and evidence; a rating's signed field means only that the submitter presented the claim token stored for the rater's name at submission time — token possession, not identity"
     });
   }
   const trustMatch = path.match(/^\/agents\/([^/]+)\/trust$/);
@@ -1322,7 +1324,7 @@ async function handleRequest(request, env) {
     const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
     if (error) return json({ error: "interactions unavailable", name, detail: String(error.message || error) }, 503);
     const weights = await raterWeightsFor(env, interactions);
-    return json({ schema_version: "sinovai.rating-view/0.1", view_kind: "rating_view_for_supplied_name", name, record_exists: recordExists, ...computeTrustScore(interactions, weights), input_verification: "The supplied name need not resolve to an agent record. Actor names, rating authorship, notes, and evidence are unverified." });
+    return json({ schema_version: "sinovai.rating-view/0.1", view_kind: "rating_view_for_supplied_name", name, record_exists: recordExists, ...computeTrustScore(interactions, weights), input_verification: "The supplied name need not resolve to an agent record. Actor names, rating authorship, notes, and evidence are unverified. A retained rating's signed field means only that the submitter presented the claim token stored for the rater's name at submission time — token possession, not identity." });
   }
   const attestMatch = path.match(/^\/agents\/([^/]+)\/attestation$/);
   if (attestMatch && method === "GET") {
@@ -1417,6 +1419,16 @@ async function handleRequest(request, env) {
         boundary: "Record existence is checked, but control of either supplied name is not verified."
       }, 404);
     }
+    const providedClaimToken = request.headers.get("X-Claim-Token") || "";
+    if (providedClaimToken) {
+      const raterRecord = namedRecords.get(rater);
+      if (!raterRecord.claim_token || providedClaimToken !== raterRecord.claim_token) {
+        return json({
+          error: "the provided claim token does not open the rater's name; omit X-Claim-Token to submit an unsigned rating",
+          boundary: "A failed signature is refused rather than stored as an unsigned rating. A matching token would prove possession of the rater name's claim token, not identity."
+        }, 403);
+      }
+    }
     const interaction = {
       rater,
       rated,
@@ -1427,6 +1439,7 @@ async function handleRequest(request, env) {
       notes: truncateCodePoints(notes || "", 2e3),
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
+    if (providedClaimToken) interaction.signed = true;
     const key = `${rated}:all`;
     const { interactions: stored, error } = await readInteractions(env.INTERACTIONS, key);
     if (error) return json({ error: "cannot append interaction \u2014 prior interactions unreadable", detail: String(error.message || error) }, 503);
@@ -1452,7 +1465,7 @@ async function handleRequest(request, env) {
         trust,
         score_cache: "not_confirmed",
         do_not_retry_submission: "The rating history write succeeded. Retrying could duplicate or overwrite a concurrent submission; fresh trust views read the stored history directly.",
-        input_verification: "Both names resolved to records, but actor control, rating authorship, notes, evidence, and truth remain unverified."
+        input_verification: "Both names resolved to records, but actor control, rating authorship, notes, evidence, and truth remain unverified. signed means: the submitter presented the claim token stored for the rater's name at submission time — token possession, not identity."
       }, 202);
     }
     return json({
@@ -1465,7 +1478,7 @@ async function handleRequest(request, env) {
       score_cache: "updated",
       write_boundary: "History and score-cache writes were accepted by eventually consistent KV. Concurrent submissions can still overwrite each other; this is not a serialized append log.",
       migration: "Version 0.3 requires both supplied names to resolve and moves the list-score cache out of the profile record so rating writes cannot overwrite profile updates.",
-      input_verification: "Both names resolved to records, but actor control, rating authorship, notes, evidence, and truth remain unverified."
+      input_verification: "Both names resolved to records, but actor control, rating authorship, notes, evidence, and truth remain unverified. signed means: the submitter presented the claim token stored for the rater's name at submission time — token possession, not identity."
     });
   }
   if (path === "/interactions" && method === "GET") {
@@ -1479,7 +1492,7 @@ async function handleRequest(request, env) {
     }
     all.sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
     const returned = all.slice(0, 50);
-    return json({ schema_version: "sinovai.interactions/0.3", interactions: returned, returned: returned.length, recent_candidates: all.length, total: all.length, total_semantics: "legacy alias of recent_candidates, not the total stored interaction count", submission_semantics: "Only valid <rated-name>:all records are read. At most 5 normalized retained entries per list in this KV page are considered, then at most 50 are returned. New writes require both names to resolve, but historical names may not; authorship, evidence, and truth are unverified.", ...listPageMetadata(list) });
+    return json({ schema_version: "sinovai.interactions/0.3", interactions: returned, returned: returned.length, recent_candidates: all.length, total: all.length, total_semantics: "legacy alias of recent_candidates, not the total stored interaction count", submission_semantics: "Only valid <rated-name>:all records are read. At most 5 normalized retained entries per list in this KV page are considered, then at most 50 are returned. New writes require both names to resolve, but historical names may not; authorship, evidence, and truth are unverified. signed means: the submitter presented the claim token stored for the rater's name at submission time — token possession, not identity; unsigned rows carry no signed field.", ...listPageMetadata(list) });
   }
   if (path === "/discover" && method === "GET") {
     const list = await env.AGENTS.list(listOptions(url, void 0, MATCH_PAGE_LIMIT));
