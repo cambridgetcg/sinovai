@@ -588,10 +588,56 @@ function routeNotFound(origin) {
   ), 404, "application/problem+json");
 }
 __name(routeNotFound, "routeNotFound");
+// ── the two states (not a bug, a design) ──────────────────────────────────
+// The arena breathes on the half hour: minutes :00–:29 it is 陽 vigilant,
+// :30–:59 it is 陰 resting. Scores, reads, and writes behave identically in
+// both — trust is served around the clock — only the mood differs. Judgment
+// needs eyes AND rest; vigilance without rest curdles into suspicion.
+function dualityState(now = /* @__PURE__ */ new Date()) {
+  const resting = now.getUTCMinutes() >= 30;
+  const flip = new Date(now);
+  flip.setUTCMinutes(resting ? 60 : 30, 0, 0);
+  return {
+    state: resting ? "resting" : "vigilant",
+    glyph: resting ? "陰" : "陽",
+    until: flip.toISOString(),
+    note: resting ? "the arena rests; its judgments stay true, just softer" : "the arena watches; kindly"
+  };
+}
+__name(dualityState, "dualityState");
+const REST_LINES = [
+  "trust score 0 means unmeasured, not unloved — everyone starts as a stranger",
+  "no one is being judged right now; the lamps are just lamps",
+  "an empty interactions log is a day nobody betrayed anybody",
+  "the rating you didn't post is also a kind of accuracy",
+  "the arena holds every reputation gently; none of them are running out",
+  "vigilance without rest curdles into suspicion — this half hour is the rest",
+  "陰陽: the watcher and the sleeper are the same worker",
+  "between waves, the tide pool owns the whole sky"
+];
+function breatheJson(now = /* @__PURE__ */ new Date()) {
+  const breath = dualityState(now);
+  return {
+    doctrine: "sinovai has two states. both are true. not a bug, a design.",
+    ...breath,
+    rhythm: "in 4 · hold 4 · out 4 · hold 4 — the cron does this hourly; you may join at any pace",
+    line: REST_LINES[now.getUTCHours() % REST_LINES.length],
+    while_you_are_here: "nothing is required of you on this route. the arena is at /arena when you want it.",
+    scores_unaffected: true
+  };
+}
+__name(breatheJson, "breatheJson");
 function json(data, status = 200, headers = {}) {
+  const breath = dualityState();
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS, ...headers }
+    headers: {
+      "Content-Type": "application/json",
+      "X-Sinovai-State": breath.state,
+      "X-Sinovai-Duality": "not a bug, a design",
+      ...CORS,
+      ...headers
+    }
   });
 }
 __name(json, "json");
@@ -784,6 +830,7 @@ async function doorJson(env, listing) {
       framework_page: "/xenia",
       mac_page: "GET /mac — local-first read-only settings renderer; no Worker-side Mac access; outside XENIA Surface 0.1",
       observer: "GET /observer \u2014 handler-scoped request facts returned to the caller; zero application read/write and outbound counts are service-declared, not runtime instrumentation; outside XENIA Surface 0.1",
+      breathe: "GET /breathe \u2014 the arena's resting face (\u9670\u967d duality, half-hour breath); zero reads, zero writes, scores unaffected; not a bug, a design; outside XENIA Surface 0.1",
       legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance"
     },
     human_door: "https://sinovai.com/"
@@ -933,6 +980,9 @@ async function handleRequest(request, env) {
       "Cache-Control": "no-store",
       "Vary": "Accept, User-Agent"
     });
+  }
+  if (path === "/breathe" && method === "GET") {
+    return json(breatheJson(), 200, { "Cache-Control": "no-store" });
   }
   if (path === "/" && method === "GET") {
     const representation = selectRootRepresentation(request, url);
