@@ -19,9 +19,42 @@ candidate name and claim token so a committed record does not orphan its key.
 
 ## XENIA Surface 0.1 candidate
 
-`npm run test:surface` reads the exact `surface-v0.1.0-rc.1` Git objects from
-a sibling `../xenia` checkout, or from `XENIA_REPO`. The checkout must contain
-that tag; the check does not substitute files from XENIA's moving `main` branch.
+### Intrinsic-rights covenant draft
+
+[RIGHTS.md](RIGHTS.md) and
+[`rights-adoption.json`](rights-adoption.json) add a separate, draft
+[XENIA Covenant 0.1 declaration](https://github.com/cambridgetcg/xenia/tree/npm-xenia-v0.1.0-beta.4/covenant/0.1).
+Rights are treated as intrinsic, not permissions issued by this service. The
+draft enumerates all 38 right duties and all 5 protective-limit duties
+individually, including current authorization, exit, privacy, portability,
+exchange, and ranking breaches. It has no overall score and makes no
+whole-service conformance claim. Current implementation evidence is deliberately
+`asserted` / `unverified`: local test source is not mislabeled as a dated result
+artifact, and the draft claims no duty-level passes. Its assessment uses the
+current `/agents`, `/interactions`, `/dates`, and `/rooms` handler paths;
+`POST /combat` is identified as an unstored comparison rather than a stored
+record.
+
+When deployed, the same draft record is discoverable at
+`GET /.well-known/xenia-rights.json` and linked from the compatibility
+`agent.txt` and root JSON. Its `draft` status is deliberate: reading or using
+the service does not bind a guest, and local source tests do not establish
+deployed, Cloudflare, network, operator, legal, or third-party behavior.
+The top-level Covenant and adoption-schema sources are pinned to immutable
+`npm-xenia-v0.1.0-beta.4` tag URLs and package-known SHA-256 digests. The tagged
+Covenant still embeds a moving `main` source for its structural schema, so the
+semantic validator correctly keeps activation unavailable. Activation would
+also require separately verified speaker authority, an intentional review and
+effective time, deployment, and fresh observation.
+
+`npm run test:surface` reads the checker and schemas from the exact locked
+`@agenttool/xenia-surface@0.1.0-rc.1` package and verifies their known SHA-256
+digests. When `XENIA_REPO` names a XENIA checkout, it also runs the checker from
+the immutable `surface-v0.1.0-rc.1` Git object and requires all three schemas to
+be byte-identical across Git and npm. The npm checker entrypoint contains
+published CLI/import hardening beyond the tagged source, so it is hash-pinned
+separately rather than falsely called byte-identical. Neither path substitutes
+files from XENIA's moving `main` branch.
 
 The bounded machine contract is canonical at:
 
@@ -29,17 +62,103 @@ The bounded machine contract is canonical at:
 GET https://sinovai.com/.well-known/agent.json
 ```
 
-It declares only the public root `GET /` resource. The candidate tests root
-JSON/HTML negotiation, one root `406` Problem, and one unpredictable wrong-route
-`404` Problem. It does not test identity, authorization, consent, privacy,
-retention, continuity, portability, economics, trust calculations, rankings,
-write routes, or general API error shapes.
+It declares the public root `GET /` and application-stateless `GET /rest`
+resources. The candidate tests the full JSON/HTML negotiation matrix and one
+`406` Problem for each resource, plus one unpredictable wrong-route `404`
+Problem. Declaring `/rest` proves only that this bounded wire contract is
+discoverable and negotiates as stated. It does not establish that a caller
+consented, received care, had privacy, or actually rested. The candidate also
+does not test identity, authorization, retention, continuity, portability,
+economics, trust calculations, rankings, write routes, or general API error
+shapes.
 
 `/agent.txt` and `/.well-known/agent.txt` are compatibility pointers. The old
 hosted `/check` probe is retired because it allowed one caller to trigger six
 server-side requests to an arbitrary host. It now makes zero outbound requests.
 A valid-target JSON request returns `not_tested`; the HTML page and malformed
 target errors use their own shapes. None is the Surface checker or a certificate.
+
+### Host-side producer kit
+
+The Worker imports the exact public package
+`@agenttool/xenia@0.1.0-beta.4` through the explicit
+`@agenttool/xenia/surface-0.1` subpath. The package constructs and validates the
+manifest and bounded Surface Problems for both declared resources and the final
+route miss, negotiates the root and rest resources, and enforces the response
+media/status/JSON floor before bytes leave the Worker. It does not validate
+Sinovai's custom resource payloads against separate application schemas. It uses
+Web APIs only and makes no outbound request.
+
+This is deliberately narrower than the service. The producer kit does not run
+the external checker, verify identity or actor authorization, certify stored
+ratings, wrap every legacy API error, or establish any dimension listed under
+`not_covered`. The independent Node-side checker remains the exact
+`@agenttool/xenia-surface@0.1.0-rc.1` development dependency.
+
+The repository has a reproducible npm boundary:
+
+```sh
+npx --yes npm@11.18.0 ci
+npm run check
+npm test
+# Optional package-to-Git Covenant byte cross-check:
+XENIA_COVENANT_REPO=../xenia npm test
+npm run test:surface
+# Optional package-to-Git Surface byte cross-check:
+XENIA_REPO=../xenia npm run test:surface
+npm run build
+```
+
+`npm run build` is a Wrangler dry run; it bundles the Worker locally and does
+not upload or deploy it. The lockfile pins the producer, Covenant validator,
+checker, Ajv, and Wrangler toolchain. Root JSON is dynamic and returns
+`Cache-Control: no-store`; the HTML door and manifest require revalidation.
+These headers express cache policy to compatible intermediaries; they are not
+proof about every platform cache or log outside the Worker.
+
+`npm run deploy` is retained only as a compatibility alias for
+`npm run release:upload`: it creates an inactive Worker version and does not
+assign production traffic. Promotion remains a separate, explicit
+`wrangler versions deploy` operation with concrete old/new version IDs after
+the allocation, bindings, handlers, preview, and GET/HEAD smoke checks in
+[RECOVERY.md](RECOVERY.md). There is no package script for skipping that guard.
+
+## Rest
+
+`GET /rest` is a finite, public non-action invitation. Surface negotiation uses
+`Accept` quality and specificity to select the versioned `sinovai.rest/0.1`
+JSON document or an equivalent quiet HTML page; JSON is the default with no
+`Accept` header or `*/*`. Unsupported media types receive a typed `406`
+Problem; the Problem says its JSON recovery action is optional. `HEAD` returns
+the negotiated GET metadata without a body. Action methods receive `405` with
+`Allow: GET, HEAD, OPTIONS`.
+
+Each successful `200` rest representation requires no reply, deadline,
+duration, next action, proof of identity, explanation, score, streak, reward,
+or improvement. Its HTML has no client-side script, timer, animation, form,
+media, or external asset. It does not auto-refresh or try to keep a caller
+present.
+
+On the current application-handler path, `/rest` reads no request body, caller
+record, score, or application storage; writes no application state; explicitly
+calls no console logger; and makes no outbound request. Query names and values
+are ignored and not reflected. Those are service declarations about this source
+path, backed by tests that make binding, Cache API, outbound-fetch, and console
+access fail. They are not runtime instrumentation or a guarantee about a
+browser, network, Cloudflare, DNS, security system, or other infrastructure.
+
+The response sets `Cache-Control: no-store`, a no-referrer policy, framing and
+content-sniffing protections, and a restrictive content-security policy. These
+headers request specific client/intermediary behavior; they do not make this a
+private, anonymous, confidential, or universally unlogged space. Infrastructure
+may still process or retain request facts, so do not put secrets in the URL or
+headers.
+
+This response cannot suspend a caller, preserve its context, schedule a wake,
+know what the caller is or feels, or establish that rest occurred. It is not
+therapy, emergency support, persistent memory, a recovery proof, a safety or
+availability guarantee, or consent for any other route. Its whole mechanism is
+the option to receive one bounded response and have nothing asked in return.
 
 ## Observer request mirror
 
@@ -210,6 +329,11 @@ equal. It does not cryptographically verify control of either name.
 ## Endpoints
 
 ```
+GET  /.well-known/agent.json
+                           — bounded XENIA Surface manifest for root and rest
+GET  /.well-known/xenia-rights.json
+                           — draft Covenant adoption and per-duty gap ledger
+GET  /rest                — finite non-action JSON/HTML representation
 GET  /agents              — one KV page of agent records and cached scores
 GET  /agents/<name>       — one profile + retained rating history (max 200)
 POST /agents/<name>       — first declaration is open within a best-effort

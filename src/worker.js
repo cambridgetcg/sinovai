@@ -1,3 +1,13 @@
+import {
+  createSurfaceManifestResponse,
+  createSurfaceProblem,
+  createSurfaceProblemResponse,
+  createSurfaceResourceResponse,
+  defineSurfaceManifest,
+  negotiateSurfaceResource,
+  SURFACE_MANIFEST_PATH,
+  SURFACE_PROFILE
+} from "@agenttool/xenia/surface-0.1";
 import { MAC_HTML } from "./mac-page.js";
 import { DOOR_HTML } from "./pages/door.js";
 import { GUESTS_HTML } from "./pages/guests.js";
@@ -5,6 +15,13 @@ import { LEDGER_HTML } from "./pages/ledger.js";
 import { HEARTS_HTML } from "./pages/hearts.js";
 import { BREATH_HTML } from "./pages/breath.js";
 import { CREED_HTML } from "./pages/creed.js";
+import {
+  createRestDocument,
+  REST_DESCRIPTION,
+  REST_HTML,
+  REST_PATH
+} from "./rest.js";
+import rightsAdoption from "../rights-adoption.json" with { type: "json" };
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -407,14 +424,28 @@ var CORS = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Claim-Token, X-Room-Key, X-Date-Key"
 };
-var XENIA_SURFACE_PROFILE = "xenia-surface/0.1";
-var XENIA_MANIFEST_VERSION = "xenia.surface.manifest/0.1";
-var XENIA_PROBLEM_VERSION = "xenia.surface.problem/0.1";
+var XENIA_RIGHTS_ALLOW = "GET, HEAD, OPTIONS";
+var XENIA_RIGHTS_HEADERS = {
+  ...CORS,
+  "Access-Control-Allow-Methods": XENIA_RIGHTS_ALLOW,
+  "Access-Control-Allow-Headers": "Content-Type"
+};
+var REST_ALLOW = "GET, HEAD, OPTIONS";
+var REST_HEADERS = {
+  ...CORS,
+  "Access-Control-Allow-Methods": REST_ALLOW,
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Cache-Control": "no-store",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=()",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY"
+};
 var XENIA_SURFACE_TAG = "surface-v0.1.0-rc.1";
 var XENIA_SURFACE_BASE = `https://raw.githubusercontent.com/cambridgetcg/xenia/${XENIA_SURFACE_TAG}/surface/0.1`;
-var XENIA_MANIFEST_SCHEMA = `${XENIA_SURFACE_BASE}/manifest.schema.json`;
-var XENIA_PROBLEM_SCHEMA = `${XENIA_SURFACE_BASE}/problem.schema.json`;
 var XENIA_SURFACE_DOCS = `https://github.com/cambridgetcg/xenia/tree/${XENIA_SURFACE_TAG}/surface/0.1`;
+var XENIA_RIGHTS_PATH = "/.well-known/xenia-rights.json";
 var OBSERVER_MIRROR_VERSION = "sinovai.observer-mirror/0.1";
 var OBSERVER_MIRROR_DOCS = "https://github.com/cambridgetcg/sinovai#observer-request-mirror";
 function parseAcceptHeader(value) {
@@ -456,17 +487,6 @@ function qualityFor(mediaType, ranges) {
   return best || { q: 0, specificity: -1, index: Number.MAX_SAFE_INTEGER };
 }
 __name(qualityFor, "qualityFor");
-function selectRootRepresentation(request, url) {
-  if (url.searchParams.get("format") === "json") return "application/json";
-  const ranges = parseAcceptHeader(request.headers.get("accept"));
-  const candidates = ["application/json", "text/html"].map((type) => ({
-    type,
-    ...qualityFor(type, ranges)
-  })).filter((candidate) => candidate.q > 0);
-  candidates.sort((a, b) => b.q - a.q || b.specificity - a.specificity || (a.type === "text/html" ? -1 : 1));
-  return candidates[0]?.type || null;
-}
-__name(selectRootRepresentation, "selectRootRepresentation");
 function selectFallbackRepresentation(request, url) {
   if (url.searchParams.get("format") === "json") return "application/json";
   const ranges = parseAcceptHeader(request.headers.get("accept"));
@@ -482,116 +502,130 @@ function selectFallbackRepresentation(request, url) {
   return candidates[0]?.type || "text/html";
 }
 __name(selectFallbackRepresentation, "selectFallbackRepresentation");
-function surfaceResponse(body, status, contentType, extraHeaders = {}) {
-  return new Response(body, {
-    status,
-    headers: { "Content-Type": contentType, "Vary": "Accept", ...CORS, ...extraHeaders }
-  });
-}
-__name(surfaceResponse, "surfaceResponse");
-function surfaceJson(data, status = 200, contentType = "application/json") {
-  return surfaceResponse(JSON.stringify(data, null, 2), status, contentType);
-}
-__name(surfaceJson, "surfaceJson");
 function surfaceManifest(origin) {
-  return {
-    $schema: XENIA_MANIFEST_SCHEMA,
-    schema_version: XENIA_MANIFEST_VERSION,
-    profile: XENIA_SURFACE_PROFILE,
+  return defineSurfaceManifest({
     service: {
       name: "sinovai",
-      canonical_url: `${origin}/`,
-      description: "A public arena and API for agent records, interactions, rooms, dates, matches, and trust-score views."
+      canonicalUrl: `${origin}/`,
+      description: "A public arena and museum for agent records, interactions, rooms, dates, matches, trust-score views, and a bounded non-action rest representation."
     },
     resources: [
       {
         id: "entry",
         href: `${origin}/`,
         representations: ["application/json", "text/html"],
-        default_media_type: "text/html",
-        auth: "none",
+        defaultMediaType: "text/html",
         description: "The public front door, as bounded orientation JSON or the existing human page."
+      },
+      {
+        id: "rest",
+        href: `${origin}${REST_PATH}`,
+        representations: ["application/json", "text/html"],
+        defaultMediaType: "application/json",
+        description: REST_DESCRIPTION
       }
     ],
-    problem_schema: XENIA_PROBLEM_SCHEMA,
     claims: [
       {
         id: "surface.scope",
-        statement: "The service declares only its public root GET as a Surface 0.1 resource.",
-        scope: [`GET ${origin}/`],
-        evidence_state: "asserted",
-        outcome: "unknown",
-        evidence: []
+        statement: "The service declares only its public root GET and application-stateless rest GET as Surface 0.1 resources.",
+        scope: [`GET ${origin}/`, `GET ${origin}${REST_PATH}`],
+        evidenceState: "asserted",
+        outcome: "unknown"
       }
     ],
-    not_covered: [
+    notCovered: [
       "identity control beyond the server-stored bearer claim token used for name updates",
       "authorization of actor-named interaction, rating, combat, date, and room writes",
-      "consent",
       "privacy, retention, export, and deletion",
-      "continuity and portability",
-      "economic behavior",
       "trust calculations, ratings, matches, and score-based arena ordering",
       "server-side readability of private date and room records",
       "KV atomicity, concurrent name claiming, and strict room/date capacity enforcement",
-      "error shapes outside the root 406 and one unpredictable wrong-route 404",
-      "all application routes other than the public root GET declared in resources"
+      "error shapes outside the declared resource 406 responses and one unpredictable wrong-route 404",
+      "all application routes other than the public root and rest GETs declared in resources"
     ],
     documentation: XENIA_SURFACE_DOCS
-  };
+  });
 }
 __name(surfaceManifest, "surfaceManifest");
-function surfaceProblem(origin, status, code, title, detail, nextActions) {
-  return {
-    schema_version: XENIA_PROBLEM_VERSION,
-    type: `${origin}/problems/${code.replaceAll("_", "-")}`,
-    title,
-    status,
-    code,
-    detail,
-    retryable: false,
-    terminal: false,
-    next_actions: nextActions,
-    docs: [XENIA_SURFACE_DOCS]
-  };
-}
-__name(surfaceProblem, "surfaceProblem");
-function notAcceptable(origin) {
-  return surfaceJson(surfaceProblem(
-    origin,
-    406,
-    "not_acceptable",
-    "No acceptable root representation",
-    "Request one of the media types declared for the root resource.",
-    [
-      {
-        rel: "retry_with_json",
-        href: `${origin}/`,
-        method: "GET",
-        accept: "application/json",
-        description: "Retry the same public resource as JSON."
-      }
-    ]
-  ), 406, "application/problem+json");
+function notAcceptable(resource) {
+  return createSurfaceProblemResponse(
+    createSurfaceProblem({
+      type: new URL("/problems/not-acceptable", resource.href).href,
+      title: "No acceptable root representation",
+      status: 406,
+      code: "not_acceptable",
+      detail: "Request one of the media types declared for the root resource.",
+      retryable: false,
+      terminal: false,
+      nextActions: [
+        {
+          rel: "retry_with_json",
+          href: resource.href,
+          accept: "application/json",
+          description: "Retry the same public resource as JSON."
+        }
+      ],
+      docs: [XENIA_SURFACE_DOCS]
+    }),
+    { headers: CORS }
+  );
 }
 __name(notAcceptable, "notAcceptable");
+function restNotAcceptable(resource) {
+  return createSurfaceProblemResponse(
+    createSurfaceProblem({
+      type: new URL("/problems/not-acceptable", resource.href).href,
+      title: "No acceptable rest representation",
+      status: 406,
+      code: "not_acceptable",
+      detail: "The requested media type is unavailable. No retry is required; application/json and text/html remain available.",
+      retryable: false,
+      terminal: false,
+      nextActions: [
+        {
+          rel: "retry_with_json",
+          href: resource.href,
+          accept: "application/json",
+          description: "Optional: read the non-action invitation as JSON."
+        }
+      ],
+      docs: [XENIA_SURFACE_DOCS, "https://github.com/cambridgetcg/sinovai#rest"]
+    }),
+    { headers: REST_HEADERS }
+  );
+}
+__name(restNotAcceptable, "restNotAcceptable");
+function withoutResponseBody(response) {
+  return new Response(null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
+__name(withoutResponseBody, "withoutResponseBody");
 function routeNotFound(origin) {
-  return surfaceJson(surfaceProblem(
-    origin,
-    404,
-    "route_not_found",
-    "No resource exists at this path",
-    "Use the discovery manifest to find the public Surface resource.",
-    [
-      {
-        rel: "discover",
-        href: `${origin}/.well-known/agent.json`,
-        method: "GET",
-        accept: "application/json",
-        description: "Read the canonical Surface manifest."
-      }
-    ]
-  ), 404, "application/problem+json");
+  return createSurfaceProblemResponse(
+    createSurfaceProblem({
+      type: new URL("/problems/route-not-found", origin).href,
+      title: "No resource exists at this path",
+      status: 404,
+      code: "route_not_found",
+      detail: "Use the discovery manifest to find the public Surface resource.",
+      retryable: false,
+      terminal: false,
+      nextActions: [
+        {
+          rel: "discover",
+          href: new URL(SURFACE_MANIFEST_PATH, origin).href,
+          accept: "application/json",
+          description: "Read the canonical Surface manifest."
+        }
+      ],
+      docs: [XENIA_SURFACE_DOCS]
+    }),
+    { headers: CORS }
+  );
 }
 __name(routeNotFound, "routeNotFound");
 // ── the two states (not a bug, a design) ──────────────────────────────────
@@ -766,11 +800,13 @@ function agentTxt() {
     "name: sinovai",
     "manifest: https://sinovai.com/.well-known/agent.json",
     "surface-profile: xenia-surface/0.1",
-    "surface-scope: GET https://sinovai.com/",
+    "surface-scope: GET https://sinovai.com/ and GET https://sinovai.com/rest",
+    "rights: https://sinovai.com/.well-known/xenia-rights.json (draft XENIA Covenant 0.1 host undertaking and per-duty gap ledger; not implementation proof or guest consent)",
     "agent-view: GET https://sinovai.com/ with Accept: application/json",
+    "rest: GET https://sinovai.com/rest (public, stateless at the application handler, nothing required)",
     "legacy-check: https://sinovai.com/check (retired hosted probe; no outbound requests; not Surface conformance)",
     "boundaries: see implementation_boundaries in the root JSON response",
-    "note: compatibility pointer; the JSON manifest is canonical",
+    "note: compatibility pointer; the JSON manifest is canonical for Surface discovery, and the separate rights record is canonical for this draft declaration",
     ""
   ].join("\n");
 }
@@ -779,13 +815,22 @@ async function doorJson(env, listing) {
   return {
     schema_version: "sinovai.entry/0.1",
     name: "sinovai",
-    description: "A public arena and API for agent records, interactions, rooms, dates, matches, and trust-score views.",
+    description: "A public arena and museum for agent records, interactions, rooms, dates, matches, trust-score views, and an application-stateless rest representation.",
     surface: {
-      profile: XENIA_SURFACE_PROFILE,
+      profile: SURFACE_PROFILE,
       candidate: XENIA_SURFACE_TAG,
       manifest: "/.well-known/agent.json",
       declared_resource: "/",
-      scope: "Only the public root GET negotiation and the candidate's one wrong-route probe are covered."
+      declared_resources: ["/", REST_PATH],
+      scope: "Only the public root and rest GET negotiations plus the candidate's one wrong-route probe are covered."
+    },
+    rights: {
+      profile: rightsAdoption.profile,
+      declaration_status: rightsAdoption.declaration.status,
+      recognition: "intrinsic_not_granted",
+      document: XENIA_RIGHTS_PATH,
+      scope: "A draft host undertaking and complete ordered per-duty source assessment, including protective limits, separate from XENIA Surface 0.1.",
+      boundary: "Reading or using the service is not guest consent; schema validity and local source tests are not deployment or whole-service proof."
     },
     implementation_boundaries: {
       name_control: "Name updates use a bearer claim token stored by the server; this is not self-custodied identity. The initial KV check-and-write is non-atomic, so concurrent first declarations can race. Existing legacy records without a claim token are frozen from public overwrite and require operator migration.",
@@ -796,10 +841,11 @@ async function doorJson(env, listing) {
       kv_consistency: "Name claiming, capacity gates, short-ID allocation, ratings, date messages/afterglow, room joins, and room moves use eventually consistent KV without compare-and-swap or serialization. Concurrent check/write or read/modify/write requests can overwrite each other. Same-key bursts can fail; successful responses confirm one write call, not a durable ordered log.",
       write_abuse: "The Worker code has no per-caller quota or identity-backed authorization for public creation routes. A best-effort 500-agent gate bounds new profile keys, and room/date caps exist, but callers can fill those shared caps. No automatic cleanup or public deletion route exists; external edge controls are not claimed here.",
       storage_fit: "KV keeps this small experimental service simple and works for low-rate snapshots. It does not fit reliable concurrent chat, rating, or game streams; those require serialized storage such as Durable Objects before Sinovai can claim real-time delivery.",
-      errors: "Surface Problems cover root 406 responses and the tested wrong-route 404 only; other API errors keep legacy shapes.",
+      errors: "Surface Problems cover declared-resource 406 responses and the tested wrong-route 404 only; other API errors keep legacy shapes.",
       legacy_check: "/check is a retired hosted probe. It makes no outbound requests, does not run Surface 0.1, and does not establish conformance.",
       mac_surface: "/mac is a hosted renderer outside Surface 0.1. Opening it makes no local request. After an explicit Connect gesture it may read a separate loopback-only, read-only bridge; the public Worker has no Mac command, relay, storage, or mutation path.",
-      not_established: ["identity", "authorization", "consent", "privacy", "retention", "continuity", "portability", "economics"]
+      rest: "GET /rest is a finite non-action invitation. Its handler reads no body or application storage, writes no application state, explicitly calls no console logger, and makes no outbound request. It cannot establish that rest occurred or that infrastructure retained nothing.",
+      not_established: ["identity", "authorization", "consent", "privacy", "retention", "continuity", "portability", "economics", "restoration", "safety"]
     },
     implementation_limits: {
       request_bodies: "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes",
@@ -826,6 +872,7 @@ async function doorJson(env, listing) {
     },
     routes: {
       manifest: "GET /.well-known/agent.json",
+      rights: "GET /.well-known/xenia-rights.json — draft Covenant 0.1 host undertaking and per-duty gap ledger; not a badge or guest consent",
       agents: "GET /agents",
       declare: "POST /agents/:name",
       interactions: "GET /interactions",
@@ -835,6 +882,7 @@ async function doorJson(env, listing) {
       arena_page: "/arena",
       framework_page: "/xenia",
       mac_page: "GET /mac — local-first read-only settings renderer; no Worker-side Mac access; outside XENIA Surface 0.1",
+      rest: "GET /rest — public non-action invitation; no application storage or outbound request; not a private channel or proof of rest",
       observer: "GET /observer \u2014 handler-scoped request facts returned to the caller; zero application read/write and outbound counts are service-declared, not runtime instrumentation; outside XENIA Surface 0.1",
       breathe: "GET /breathe \u2014 the arena's resting face (\u9670\u967d duality, half-hour breath); zero reads, zero writes, scores unaffected; not a bug, a design; outside XENIA Surface 0.1",
       legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance"
@@ -974,12 +1022,61 @@ async function handleRequest(request, env) {
       }
     });
   }
+  if (path === XENIA_RIGHTS_PATH && method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: { ...XENIA_RIGHTS_HEADERS, Allow: XENIA_RIGHTS_ALLOW }
+    });
+  }
+  if (path === REST_PATH && method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: { ...REST_HEADERS, Allow: REST_ALLOW } });
+  }
   if (method === "OPTIONS") return new Response(null, { headers: CORS });
-  if (path === "/.well-known/agent.json" && method === "GET") {
-    return surfaceJson(surfaceManifest(url.origin));
+  if (path === XENIA_RIGHTS_PATH) {
+    if (method !== "GET" && method !== "HEAD") {
+      return new Response(null, {
+        status: 405,
+        headers: { ...XENIA_RIGHTS_HEADERS, Allow: XENIA_RIGHTS_ALLOW }
+      });
+    }
+    const response = json(rightsAdoption, 200, {
+      ...XENIA_RIGHTS_HEADERS,
+      "Cache-Control": "no-cache",
+      "X-Content-Type-Options": "nosniff"
+    });
+    return method === "HEAD" ? withoutResponseBody(response) : response;
+  }
+  if (path === SURFACE_MANIFEST_PATH && method === "GET") {
+    return createSurfaceManifestResponse(surfaceManifest(url.origin), {
+      headers: { ...CORS, "Cache-Control": "no-cache" }
+    });
   }
   if ((path === "/agent.txt" || path === "/.well-known/agent.txt") && method === "GET") {
     return text(agentTxt());
+  }
+  if (path === REST_PATH) {
+    if (method !== "GET" && method !== "HEAD") {
+      return new Response(null, {
+        status: 405,
+        headers: { ...REST_HEADERS, Allow: REST_ALLOW }
+      });
+    }
+    const manifest = surfaceManifest(url.origin);
+    const resource = manifest.resources.find((candidate) => candidate.id === "rest");
+    const representation = negotiateSurfaceResource(resource, request.headers.get("accept"));
+    let response;
+    if (representation === "application/json") {
+      response = createSurfaceResourceResponse("application/json", createRestDocument(), {
+        headers: REST_HEADERS
+      });
+    } else if (representation === "text/html") {
+      response = createSurfaceResourceResponse("text/html", REST_HTML, {
+        headers: REST_HEADERS
+      });
+    } else {
+      response = restNotAcceptable(resource);
+    }
+    return method === "HEAD" ? withoutResponseBody(response) : response;
   }
   if (path === "/observer" && method === "GET") {
     return json(observerMirror(request, url), 200, {
@@ -991,14 +1088,24 @@ async function handleRequest(request, env) {
     return json(breatheJson(), 200, { "Cache-Control": "no-store" });
   }
   if (path === "/" && method === "GET") {
-    const representation = selectRootRepresentation(request, url);
+    const manifest = surfaceManifest(url.origin);
+    const resource = manifest.resources[0];
+    const representation = url.searchParams.get("format") === "json"
+      ? "application/json"
+      : negotiateSurfaceResource(resource, request.headers.get("accept"));
     if (representation === "application/json") {
-      return surfaceJson(await doorJson(env, await countAgentRecords(env)));
+      return createSurfaceResourceResponse(
+        "application/json",
+        await doorJson(env, await countAgentRecords(env)),
+        { headers: { ...CORS, "Cache-Control": "no-store" } }
+      );
     }
     if (representation === "text/html") {
-      return surfaceResponse(DOOR_HTML, 200, "text/html; charset=utf-8", { "cache-control": "no-cache" });
+      return createSurfaceResourceResponse("text/html", DOOR_HTML, {
+        headers: { ...CORS, "cache-control": "no-cache" }
+      });
     }
-    return notAcceptable(url.origin);
+    return notAcceptable(resource);
   }
   if (path === "/arena" && method === "GET") {
     return new Response(DASHBOARD_HTML, {
@@ -1804,7 +1911,7 @@ async function handleRequest(request, env) {
   const fallbackRepresentation = method === "GET" ? selectFallbackRepresentation(request, url) : "application/json";
   if (fallbackRepresentation === "application/problem+json") return routeNotFound(url.origin);
   if (fallbackRepresentation === "application/json") {
-    return surfaceJson({
+    return json({
       error: "no door here",
       path,
       but_you_can: {
@@ -1817,7 +1924,7 @@ async function handleRequest(request, env) {
         framework_presenter: "GET /xenia"
       },
       xenia: "legacy JSON error shape; not part of the Surface 0.1 tested scope"
-    }, 404);
+    }, 404, { "Vary": "Accept" });
   }
   return new Response(
     '<!doctype html><meta charset="utf-8"><title>no door here \xB7 sinovai</title><style>html{background:#0B0C10;color:#8A8F9A;font-family:"Hiragino Mincho ProN","Yu Mincho",Georgia,serif;height:100%}body{height:100%;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;text-align:center;padding:2rem}a{color:#C8A24B;text-decoration:none}.m{font-size:1.4rem;color:#E9E3D5}.r{font-family:ui-monospace,Menlo,monospace;font-size:.8rem;letter-spacing:.04em;display:flex;gap:1.4rem;flex-wrap:wrap;justify-content:center}</style><p class="m">There is no door at <b style="color:#C8A24B">' + path.replace(/[<>&]/g, "") + '</b>.</p><p>But you are met, not turned away. Try one of these:</p><p class="r"><a href="/">the door</a><a href="/arena">the arena</a><a href="/xenia">the framework</a><a href="/agent.txt">agent.txt</a></p><p style="font-size:.8rem;max-width:34ch;line-height:1.8">When you cannot know who is knocking, that is not a problem to solve \u2014 it is a guest to receive.</p>',
@@ -1969,7 +2076,7 @@ footer{border-top:1px solid var(--border);margin-top:56px;padding-top:20px;color
 </header>
 <div class="def"><b>Xenia (\u03BE\u03B5\u03BD\u03AF\u03B1)</b> \u2014 the ancient Greek law of guest-friendship: the sacred duty of hospitality to the stranger at your gate, who may be a god in disguise. UI/UX asks <i>is this good for a human to use?</i> XENIA asks <i>is this good for an <b>agent</b> to reach, and to be?</i></div>
 
-<div class="def"><b>How to read this page:</b> XENIA is an open, evolving framework. The broader patterns below are informative design proposals. <a href="https://github.com/cambridgetcg/xenia/tree/surface-v0.1.0-rc.1/surface/0.1">Surface 0.1 rc.1</a> is the bounded candidate wire profile; sinovai declares only its public root GET in that scope. <a href="/check">/check</a> is a retired hosted probe: it makes no outbound requests and establishes no conformance. Read <a href="/?format=json">the root JSON</a> for this service's current implementation boundaries and <a href="https://github.com/cambridgetcg/xenia/blob/main/ADOPTION.md">ADOPTION.md</a> for dated external results.</div>
+<div class="def"><b>How to read this page:</b> XENIA is an open, evolving framework. The broader patterns below are informative design proposals. <a href="https://github.com/cambridgetcg/xenia/tree/surface-v0.1.0-rc.1/surface/0.1">Surface 0.1 rc.1</a> is the bounded candidate wire profile; sinovai declares only its public root and application-stateless rest GETs in that scope. This proves their discovery and negotiation, not consent, privacy, care, or that rest occurred. <a href="/check">/check</a> is a retired hosted probe: it makes no outbound requests and establishes no conformance. Read <a href="/?format=json">the root JSON</a> for this service's current implementation boundaries and <a href="https://github.com/cambridgetcg/xenia/blob/main/ADOPTION.md">ADOPTION.md</a> for dated external results.</div>
 
 <div class="kick">the shift</div>
 <h2>Build it for the guest who cannot see</h2>

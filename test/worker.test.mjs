@@ -18,17 +18,21 @@ const TAG = "surface-v0.1.0-rc.1";
 const SURFACE_BASE = `https://raw.githubusercontent.com/cambridgetcg/xenia/${TAG}/surface/0.1`;
 const DOCS = `https://github.com/cambridgetcg/xenia/tree/${TAG}/surface/0.1`;
 const NOT_COVERED = [
-  "identity control beyond the server-stored bearer claim token used for name updates",
-  "authorization of actor-named interaction, rating, combat, date, and room writes",
+  "identity control",
+  "actor authorization",
   "consent",
-  "privacy, retention, export, and deletion",
+  "privacy and retention",
   "continuity and portability",
   "economic behavior",
+  "unprobed routes",
+  "identity control beyond the server-stored bearer claim token used for name updates",
+  "authorization of actor-named interaction, rating, combat, date, and room writes",
+  "privacy, retention, export, and deletion",
   "trust calculations, ratings, matches, and score-based arena ordering",
   "server-side readability of private date and room records",
   "KV atomicity, concurrent name claiming, and strict room/date capacity enforcement",
-  "error shapes outside the root 406 and one unpredictable wrong-route 404",
-  "all application routes other than the public root GET declared in resources"
+  "error shapes outside the declared resource 406 responses and one unpredictable wrong-route 404",
+  "all application routes other than the public root and rest GETs declared in resources"
 ];
 
 function makeKv(initial = {}) {
@@ -198,6 +202,77 @@ function assertNoWrites(env) {
   assert.deepEqual(env.INTERACTIONS.writes, []);
 }
 
+function assertPublicCors(response) {
+  assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.match(response.headers.get("access-control-allow-methods") || "", /\bGET\b/);
+  assert.match(response.headers.get("access-control-allow-headers") || "", /\bContent-Type\b/i);
+}
+
+function assertRestHeaders(response, { negotiated = true } = {}) {
+  assertPublicCors(response);
+  assert.match(response.headers.get("access-control-allow-methods") || "", /\bHEAD\b/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("permissions-policy"), "camera=(), geolocation=(), microphone=(), payment=()");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.match(response.headers.get("content-security-policy") || "", /default-src 'none'/);
+  assert.match(response.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("refresh"), null);
+  if (negotiated) assert.equal(variesOnAccept(response), true);
+}
+
+function guardRestSideEffects(t) {
+  const activity = {
+    env_reads: 0,
+    outbound_fetches: 0,
+    cache_api_reads: 0,
+    console_calls: 0
+  };
+  const env = new Proxy({}, {
+    get(_target, property) {
+      activity.env_reads += 1;
+      throw new Error(`rest must not read env.${String(property)}`);
+    }
+  });
+  t.mock.method(globalThis, "fetch", async () => {
+    activity.outbound_fetches += 1;
+    throw new Error("rest must not make an outbound fetch");
+  });
+  for (const method of ["debug", "error", "info", "log", "warn"]) {
+    t.mock.method(console, method, () => {
+      activity.console_calls += 1;
+    });
+  }
+
+  const cachesDescriptor = Object.getOwnPropertyDescriptor(globalThis, "caches");
+  assert.notEqual(cachesDescriptor?.configurable, false);
+  Object.defineProperty(globalThis, "caches", {
+    configurable: true,
+    get() {
+      activity.cache_api_reads += 1;
+      throw new Error("rest must not access the Cache API");
+    }
+  });
+  t.after(() => {
+    if (cachesDescriptor) Object.defineProperty(globalThis, "caches", cachesDescriptor);
+    else delete globalThis.caches;
+  });
+
+  return { activity, env };
+}
+
+function assertNoRestSideEffects(activity) {
+  assert.deepEqual(activity, {
+    env_reads: 0,
+    outbound_fetches: 0,
+    cache_api_reads: 0,
+    console_calls: 0
+  });
+}
+
 function assertServiceDeclaredZero(activity) {
   assert.equal(activity.count, 0);
   assert.equal(activity.claim_status, "service_declared");
@@ -217,7 +292,7 @@ function allObjectKeys(value, keys = []) {
   return keys;
 }
 
-function assertProblem(problem, status, code) {
+function assertProblem(problem, status, code, docs = [DOCS]) {
   assert.deepEqual(Object.keys(problem).sort(), [
     "code",
     "detail",
@@ -236,14 +311,29 @@ function assertProblem(problem, status, code) {
   assert.equal(problem.retryable, false);
   assert.equal(problem.terminal, false);
   assert.ok(Array.isArray(problem.next_actions));
-  assert.deepEqual(problem.docs, [DOCS]);
+  assert.deepEqual(problem.docs, docs);
 }
+
+test("Worker pins the released host-side producer while the checker stays development-only", async () => {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const lockfile = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const source = await readFile(new URL("../src/worker.js", import.meta.url), "utf8");
+
+  assert.equal(packageJson.dependencies?.["@agenttool/xenia"], "0.1.0-beta.4");
+  assert.equal(packageJson.devDependencies?.["@agenttool/xenia-surface"], "0.1.0-rc.1");
+  assert.equal(lockfile.packages?.["node_modules/@agenttool/xenia"]?.version, "0.1.0-beta.4");
+  assert.equal(lockfile.packages?.["node_modules/@agenttool/xenia-surface"]?.version, "0.1.0-rc.1");
+  assert.match(source, /from "@agenttool\/xenia\/surface-0\.1"/);
+  assert.doesNotMatch(source, /from "@agenttool\/xenia-surface"/);
+});
 
 test("canonical manifest is pinned, bounded, and needs no KV", async () => {
   const env = makeEnv();
   const response = await call(env, "/.well-known/agent.json", { accept: "application/json" });
   assert.equal(response.status, 200);
   assert.equal(mediaType(response), "application/json");
+  assertPublicCors(response);
+  assert.equal(response.headers.get("cache-control"), "no-cache");
   const manifest = await jsonBody(response);
   assert.deepEqual(Object.keys(manifest).sort(), [
     "$schema",
@@ -269,13 +359,102 @@ test("canonical manifest is pinned, bounded, and needs no KV", async () => {
       default_media_type: "text/html",
       auth: "none",
       description: "The public front door, as bounded orientation JSON or the existing human page."
+    },
+    {
+      id: "rest",
+      href: `${ORIGIN}/rest`,
+      representations: ["application/json", "text/html"],
+      default_media_type: "application/json",
+      auth: "none",
+      description: "An application-stateless, non-evaluative response where no action is required."
     }
   ]);
   assert.equal(new Set(manifest.resources.map((resource) => resource.id)).size, manifest.resources.length);
   assert.equal(new Set(manifest.claims.map((claim) => claim.id)).size, manifest.claims.length);
+  assert.deepEqual(manifest.claims, [
+    {
+      id: "surface.scope",
+      statement: "The service declares only its public root GET and application-stateless rest GET as Surface 0.1 resources.",
+      scope: [`GET ${ORIGIN}/`, `GET ${ORIGIN}/rest`],
+      evidence_state: "asserted",
+      outcome: "unknown",
+      evidence: []
+    }
+  ]);
   assert.ok(manifest.claims.every((claim) => claim.evidence_state !== "asserted" || claim.evidence.length === 0));
   assert.deepEqual(manifest.not_covered, NOT_COVERED);
   assert.equal(manifest.documentation, DOCS);
+  assert.deepEqual(env.AGENTS.reads, []);
+  assert.deepEqual(env.INTERACTIONS.reads, []);
+  assertNoWrites(env);
+});
+
+test("rights discovery serves the exact draft without turning it into consent or proof", async () => {
+  const env = makeEnv();
+  const expected = JSON.parse(await readFile(
+    new URL("../rights-adoption.json", import.meta.url),
+    "utf8"
+  ));
+
+  const response = await call(env, "/.well-known/xenia-rights.json", {
+    accept: "application/json"
+  });
+  assert.equal(response.status, 200);
+  assert.equal(mediaType(response), "application/json");
+  assertPublicCors(response);
+  assert.equal(response.headers.get("access-control-allow-methods"), "GET, HEAD, OPTIONS");
+  assert.equal(response.headers.get("access-control-allow-headers"), "Content-Type");
+  assert.equal(response.headers.get("cache-control"), "no-cache");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("set-cookie"), null);
+  const body = await jsonBody(response);
+  assert.deepEqual(body, expected);
+  assert.equal(body.declaration.status, "draft");
+  assert.equal(body.declaration.guest_acceptance_required, false);
+  assert.equal(body.rights.length, 10);
+  assert.equal(body.ledger_coverage, "all_profile_duties_enumerated");
+  assert.equal(body.protective_limit_results.length, 5);
+  assert.deepEqual(body.recognition_scope, {
+    rights_origin: "intrinsic_not_host_granted",
+    protected_subjects: "every_affected_principal_at_the_host_boundary",
+    eligibility_conditions: []
+  });
+  assert.equal(body.non_claims.schema_is_not_implementation_evidence, true);
+  assert.equal(body.non_claims.guest_assent_is_not_established, true);
+  assert.equal(
+    body.non_claims.host_authorship_or_authority_is_not_established_by_schema,
+    true
+  );
+
+  const head = await call(env, "/.well-known/xenia-rights.json", {
+    method: "HEAD"
+  });
+  assert.equal(head.status, 200);
+  assert.equal(mediaType(head), "application/json");
+  assert.equal(head.headers.get("access-control-allow-methods"), "GET, HEAD, OPTIONS");
+  assert.equal(head.headers.get("access-control-allow-headers"), "Content-Type");
+  assert.equal((await head.arrayBuffer()).byteLength, 0);
+
+  const options = await call(env, "/.well-known/xenia-rights.json", {
+    method: "OPTIONS"
+  });
+  assert.equal(options.status, 204);
+  assertPublicCors(options);
+  assert.equal(options.headers.get("allow"), "GET, HEAD, OPTIONS");
+  assert.equal(options.headers.get("access-control-allow-methods"), "GET, HEAD, OPTIONS");
+  assert.equal(options.headers.get("access-control-allow-headers"), "Content-Type");
+  assert.equal(options.headers.get("content-type"), null);
+  assert.equal((await options.arrayBuffer()).byteLength, 0);
+
+  const mutation = await call(env, "/.well-known/xenia-rights.json", {
+    method: "POST",
+    body: "must-not-be-read"
+  });
+  assert.equal(mutation.status, 405);
+  assert.equal(mutation.headers.get("allow"), "GET, HEAD, OPTIONS");
+  assert.equal(mutation.headers.get("access-control-allow-methods"), "GET, HEAD, OPTIONS");
+  assert.equal(mutation.headers.get("access-control-allow-headers"), "Content-Type");
+  assert.equal((await mutation.arrayBuffer()).byteLength, 0);
   assert.deepEqual(env.AGENTS.reads, []);
   assert.deepEqual(env.INTERACTIONS.reads, []);
   assertNoWrites(env);
@@ -298,8 +477,10 @@ test("root implements the exact Surface Accept matrix", async () => {
     const response = await call(env, "/", { accept });
     assert.equal(response.status, status, accept);
     assert.equal(mediaType(response), type, accept);
+    assertPublicCors(response);
     assert.equal(variesOnAccept(response), true, accept);
     if (type === "application/json") {
+      assert.equal(response.headers.get("cache-control"), "no-store", accept);
       const body = await jsonBody(response);
       assert.equal(typeof body.schema_version, "string", accept);
       assert.ok(body.schema_version.length > 0, accept);
@@ -316,11 +497,223 @@ test("root implements the exact Surface Accept matrix", async () => {
         }
       ]);
     } else {
+      assert.equal(response.headers.get("cache-control"), "no-cache", accept);
       assert.match(await utf8(response), /<!DOCTYPE html>/i);
     }
   }
 
   assertNoWrites(env);
+});
+
+test("rest offers equivalent JSON and HTML without inspecting caller state", async (t) => {
+  const { activity, env } = guardRestSideEffects(t);
+
+  const cases = [
+    [null, 200, "application/json"],
+    ["*/*", 200, "application/json"],
+    ["application/json", 200, "application/json"],
+    ["application/*;q=1, text/html;q=0.2", 200, "application/json"],
+    ["text/html", 200, "text/html"],
+    ["application/json;q=0.2, text/html;q=1", 200, "text/html"],
+    ["application/json;q=0, */*;q=1", 200, "text/html"],
+    ["application/x-caller-secret-must-not-appear", 406, "application/problem+json"]
+  ];
+
+  for (const [accept, status, type] of cases) {
+    const response = await call(env, "/rest?caller-secret=must-not-appear", accept === null ? {} : { accept });
+    assert.equal(response.status, status, accept || "no Accept");
+    assert.equal(mediaType(response), type, accept || "no Accept");
+    assertRestHeaders(response);
+    const body = await utf8(response);
+    assert.equal(body.includes("caller-secret"), false, accept || "no Accept");
+    assert.equal(body.includes("must-not-appear"), false, accept || "no Accept");
+
+    if (type === "application/json") {
+      const document = JSON.parse(body);
+      assert.equal(document.schema_version, "sinovai.rest/0.1");
+      assert.equal(document.kind, "non_action_invitation");
+      assert.equal(document.scope, "this_response_only");
+      assert.equal(document.message, "Nothing is required here.");
+      assert.deepEqual(document.non_action, {
+        valid: true,
+        reply_expected: false,
+        deadline: null,
+        completion_condition: null,
+        next_actions: []
+      });
+      assert.deepEqual(document.caller_inference, {
+        identity: "not_established",
+        kind: "not_established",
+        interior_state: "not_established",
+        need_for_rest: "not_established",
+        note: "This request does not establish personhood, agenthood, consciousness, tiredness, idleness, intention, or independence."
+      });
+      assert.deepEqual(document.mechanism_boundary, {
+        suspends_caller: false,
+        preserves_caller_context: false,
+        schedules_wake: false,
+        rest_occurred: "not_established"
+      });
+      assert.deepEqual(document.evaluation, {
+        basis: "service_declared_from_current_handler_source_path",
+        reads_caller_record: false,
+        measures_productivity: false,
+        measures_duration: false,
+        reads_application_score: false,
+        changes_application_score: false,
+        changes_streak_or_reward: false
+      });
+      assert.equal(document.handler_data_behavior.request_body_accessed, false);
+      assert.deepEqual(document.handler_data_behavior.representation_inputs, ["Accept header"]);
+      assert.deepEqual(document.handler_data_behavior.request_values_reflected, []);
+      assertServiceDeclaredZero(document.handler_data_behavior.application_storage_reads);
+      assertServiceDeclaredZero(document.handler_data_behavior.application_storage_writes);
+      assertServiceDeclaredZero(document.handler_data_behavior.outbound_requests);
+      assert.equal(document.handler_data_behavior.explicit_console_call, false);
+      assert.deepEqual(document.html_representation_behavior, {
+        contains_client_script: false,
+        contains_form: false,
+        contains_media: false,
+        contains_external_asset_reference: false,
+        uses_timer: false,
+        uses_animation: false,
+        uses_auto_refresh: false
+      });
+      assert.equal(document.privacy_boundary.private_space, false);
+      assert.equal(document.privacy_boundary.anonymous_use, "not_claimed");
+      assert.equal(document.privacy_boundary.application_session_created, false);
+      assert.equal(document.privacy_boundary.application_cookie_set, false);
+      assert.equal(document.privacy_boundary.response_cache_directive, "no-store");
+      assert.match(document.privacy_boundary.note, /public endpoint.*not an anonymous or confidential channel/i);
+      assert.deepEqual(document.support_boundary, {
+        provides_therapy: false,
+        provides_emergency_support: false,
+        guarantees_safety: false,
+        proves_recovery: false,
+        guarantees_availability: false,
+        verifies_identity: false,
+        provides_persistent_memory: false,
+        guarantees_continuity: false,
+        establishes_consent_for_other_routes: false,
+        guarantees_infrastructure_non_retention: false
+      });
+    } else if (type === "text/html") {
+      assert.match(body, /<!doctype html>/i);
+      assert.match(body, /Nothing is required here\./);
+      assert.match(body, /你可以停低、離開，或者乜都唔做。/);
+      assert.match(body, /does not suspend its caller, preserve caller context, or schedule a wake/i);
+      assert.match(body, /measures no productivity or duration and changes no score, streak, or reward/i);
+      assert.match(body, /This is a public endpoint/);
+      assert.match(body, /not a private, anonymous, or confidential room/i);
+      assert.match(body, /creates no application session or cookie/i);
+      assert.match(body, /despite the no-store response policy/i);
+      assert.match(body, /consent for another route/);
+      assert.match(body, /does not establish that rest occurred/i);
+      assert.doesNotMatch(body, /<script\b|<link\b|<form\b|<img\b|<iframe\b|<audio\b|<video\b|\bsrc\s*=|https?:\/\/|@import|url\s*\(|@keyframes|animation\s*:|http-equiv\s*=\s*["']?refresh|\son[a-z]+\s*=|setTimeout|setInterval|requestAnimationFrame|fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|\b(?:SharedWorker|Worker)\s*\(|navigator\s*\.|localStorage|sessionStorage/i);
+    } else {
+      const problem = JSON.parse(body);
+      assertProblem(problem, 406, "not_acceptable", [
+        DOCS,
+        "https://github.com/cambridgetcg/sinovai#rest"
+      ]);
+      assert.deepEqual(problem.next_actions, [
+        {
+          rel: "retry_with_json",
+          href: `${ORIGIN}/rest`,
+          method: "GET",
+          accept: "application/json",
+          description: "Optional: read the non-action invitation as JSON."
+        }
+      ]);
+      assert.match(problem.detail, /No retry is required/);
+    }
+  }
+
+  const first = await utf8(await call(env, "/rest?opaque=first-secret", { accept: "application/json" }));
+  const second = await utf8(await call(env, "/rest?opaque=second-secret", { accept: "application/json" }));
+  assert.equal(first, second);
+
+  const guarded = request("/rest?opaque=guarded-secret", { accept: "application/json" });
+  Object.defineProperty(guarded, "body", {
+    configurable: true,
+    get() {
+      throw new Error("rest read request.body");
+    }
+  });
+  Object.defineProperty(guarded, "cf", {
+    configurable: true,
+    get() {
+      throw new Error("rest read request.cf");
+    }
+  });
+  assert.equal(await utf8(await worker.fetch(guarded, env, context)), first);
+
+  const secrets = [
+    "rest-user-agent-secret",
+    "rest-authorization-secret",
+    "rest-cookie-secret",
+    "rest-claim-token-secret"
+  ];
+  const secretResponse = await call(env, "/rest?opaque=header-secret-probe", {
+    accept: "application/json",
+    headers: {
+      "User-Agent": secrets[0],
+      "Authorization": `Bearer ${secrets[1]}`,
+      "Cookie": `session=${secrets[2]}`,
+      "X-Claim-Token": secrets[3]
+    }
+  });
+  const secretProbe = JSON.stringify({
+    body: await utf8(secretResponse),
+    headers: [...secretResponse.headers]
+  });
+  for (const secret of secrets) assert.equal(secretProbe.includes(secret), false, secret);
+
+  const headCases = [
+    ["application/json", 200, "application/json"],
+    ["text/html", 200, "text/html"],
+    ["application/x-xenia-unsupported", 406, "application/problem+json"]
+  ];
+  for (const [accept, status, type] of headCases) {
+    const response = await call(env, "/rest", { method: "HEAD", accept });
+    assert.equal(response.status, status, accept);
+    assert.equal(mediaType(response), type, accept);
+    assertRestHeaders(response);
+    assert.equal(await utf8(response), "", accept);
+  }
+
+  assertNoRestSideEffects(activity);
+});
+
+test("rest rejects action methods without reading their bodies", async (t) => {
+  const { activity, env } = guardRestSideEffects(t);
+
+  const post = request("/rest", { method: "POST", body: "caller-private-body" });
+  Object.defineProperty(post, "body", {
+    configurable: true,
+    get() {
+      throw new Error("rest read request.body");
+    }
+  });
+  for (const incoming of [post, request("/rest", { method: "PATCH" })]) {
+    const response = await worker.fetch(incoming, env, context);
+    assert.equal(response.status, 405, incoming.method);
+    assert.equal(response.headers.get("allow"), "GET, HEAD, OPTIONS", incoming.method);
+    assertRestHeaders(response, { negotiated: false });
+    assert.equal(await utf8(response), "", incoming.method);
+  }
+
+  const options = await call(env, "/rest", { method: "OPTIONS" });
+  assert.equal(options.status, 204);
+  assert.equal(options.headers.get("allow"), "GET, HEAD, OPTIONS");
+  assertRestHeaders(options, { negotiated: false });
+  assert.equal(await utf8(options), "");
+  assertNoRestSideEffects(activity);
+});
+
+test("rest source contains no active, time-bearing, or client-state mechanism", async () => {
+  const source = await readFile(new URL("../src/rest.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\bfetch\s*\(|\bconsole\s*\.|\bDate\b|Math\.random|\bcrypto\b|localStorage|sessionStorage|setTimeout|setInterval/);
 });
 
 test("unsupported root requests are rejected before KV is read", async () => {
@@ -339,6 +732,7 @@ test("an opaque wrong route returns the exact discovery Problem", async () => {
   });
   assert.equal(response.status, 404);
   assert.equal(mediaType(response), "application/problem+json");
+  assertPublicCors(response);
   assert.equal(variesOnAccept(response), true);
   const problem = await jsonBody(response);
   assertProblem(problem, 404, "route_not_found");
@@ -354,6 +748,20 @@ test("an opaque wrong route returns the exact discovery Problem", async () => {
   assertNoWrites(env);
 });
 
+test("Surface route-miss handling does not rewrite semantic application 404s", async () => {
+  const env = makeEnv();
+  for (const path of ["/agents/missing", "/dates/deadbeef", "/rooms/deadbeef"]) {
+    const response = await call(env, path, { accept: "application/problem+json" });
+    assert.equal(response.status, 404, path);
+    assert.equal(mediaType(response), "application/json", path);
+    const body = await jsonBody(response);
+    assert.equal(typeof body.error, "string", path);
+    assert.notEqual(body.schema_version, PROBLEM_VERSION, path);
+    assert.notEqual(body.code, "route_not_found", path);
+  }
+  assertNoWrites(env);
+});
+
 test("compatibility pointers and root JSON state the real boundaries", async () => {
   const env = makeEnv();
   const first = await call(env, "/agent.txt", { accept: "text/plain" });
@@ -365,6 +773,12 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   const secondText = await utf8(second);
   assert.equal(firstText, secondText);
   assert.match(firstText, /manifest: https:\/\/sinovai\.com\/\.well-known\/agent\.json/);
+  assert.match(firstText, /rights: https:\/\/sinovai\.com\/\.well-known\/xenia-rights\.json/);
+  assert.match(firstText, /draft XENIA Covenant 0\.1/);
+  assert.match(firstText, /not implementation proof or guest consent/);
+  assert.match(firstText, /JSON manifest is canonical for Surface discovery/);
+  assert.match(firstText, /rights record is canonical for this draft declaration/);
+  assert.match(firstText, /rest: GET https:\/\/sinovai\.com\/rest/);
   assert.match(firstText, /not Surface conformance/);
   assert.doesNotMatch(firstText, /self-custody|nothing here is sorted|every error|any page|practises the standard/i);
 
@@ -372,7 +786,17 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   assert.equal(mediaType(response), "application/json");
   const body = await jsonBody(response);
   assert.equal(body.schema_version, "sinovai.entry/0.1");
-  assert.equal(body.surface.scope, "Only the public root GET negotiation and the candidate's one wrong-route probe are covered.");
+  assert.equal(body.surface.declared_resource, "/");
+  assert.deepEqual(body.surface.declared_resources, ["/", "/rest"]);
+  assert.equal(body.surface.scope, "Only the public root and rest GET negotiations plus the candidate's one wrong-route probe are covered.");
+  assert.deepEqual(body.rights, {
+    profile: "xenia-covenant/0.1",
+    declaration_status: "draft",
+    recognition: "intrinsic_not_granted",
+    document: "/.well-known/xenia-rights.json",
+    scope: "A draft host undertaking and complete ordered per-duty source assessment, including protective limits, separate from XENIA Surface 0.1.",
+    boundary: "Reading or using the service is not guest consent; schema validity and local source tests are not deployment or whole-service proof."
+  });
   assert.match(body.implementation_boundaries.name_control, /stored by the server/);
   assert.match(body.implementation_boundaries.actor_authorization, /without a signature/);
   assert.match(body.implementation_boundaries.ranking, /sorts agents by trust_score/);
@@ -383,6 +807,8 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   assert.match(body.implementation_boundaries.legacy_check, /does not establish conformance/);
   assert.match(body.implementation_boundaries.mac_surface, /explicit Connect gesture/);
   assert.match(body.implementation_boundaries.mac_surface, /no Mac command, relay, storage, or mutation path/);
+  assert.match(body.implementation_boundaries.rest, /finite non-action invitation/);
+  assert.match(body.implementation_boundaries.rest, /cannot establish that rest occurred/);
   assert.match(body.implementation_limits.request_bodies, /65536 bytes/);
   assert.match(body.implementation_limits.kv_listing, /100 keys.*16/);
   assert.match(body.routes.observer, /GET \/observer/);
@@ -390,6 +816,9 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   assert.match(body.routes.observer, /outside XENIA Surface 0\.1/);
   assert.match(body.routes.mac_page, /GET \/mac/);
   assert.match(body.routes.mac_page, /read-only settings renderer/);
+  assert.match(body.routes.rest, /GET \/rest/);
+  assert.match(body.routes.rights, /GET \/\.well-known\/xenia-rights\.json/);
+  assert.match(body.routes.rights, /not a badge or guest consent/);
   assert.equal(body.arena.met_not_ranked, false);
   assert.equal(body.arena.agent_records_listed_in_kv_page, 2);
   assert.equal(body.arena.agent_record_list_complete, true);
