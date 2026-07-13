@@ -3,6 +3,12 @@ main = "src/worker.js"
 compatibility_date = "2024-12-01"
 keep_vars = true
 
+# sinovai.com itself is bound as a dashboard Custom Domain. This route only
+# adds www — before 2026-07-13 www fell through to a dead 2022 HostGator page.
+routes = [
+  { pattern = "www.sinovai.com/*", zone_name = "sinovai.com" }
+]
+
 [[kv_namespaces]]
 binding = "AGENTS"
 id = "f2e164300f28477e84c8075601d809a2"
