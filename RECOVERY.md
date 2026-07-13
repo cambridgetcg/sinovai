@@ -196,15 +196,18 @@ active production state:
 - the same script ETag as staged v40,
   `dbba68ba44b164b1066017e501593d7aa6754ea6c3c6b02484365e81448a8fbd`.
 
-ETag equality and version metadata established that v40 and v45 carry the same
-Worker artifact and versioned configuration. V45 has both expected KV namespace
-IDs, `SITE_TITLE`, inherited `ATTEST_SIGNING_KEY`, compatibility date
-`2024-12-01`, and both fetch and scheduled handlers. The checked-in source at
-the release merge is 208,612 bytes with 2,969 lines and SHA-256
-`a6f510c9f07915d32a5855997f627a65d17e6ac4ed770c9722aa65e68d1f895d`.
-Wrangler 4.60.0's tested dry-run bundle is 268,398 bytes with 3,595 lines and
-SHA-256
+Authenticated `content/v2` reads returned the v40 and v45 `worker.js`
+entrypoints as byte-for-byte identical: 268,398 bytes, 3,595 newline characters,
+and SHA-256
 `fce258e7938774c42f3482eeae579e7c9ab69bad9bd15fb427fce301b91d1976`.
+Their script ETags also match. Separately, their version metadata reports the
+same two KV namespace IDs, `SITE_TITLE`, inherited `ATTEST_SIGNING_KEY`,
+compatibility date `2024-12-01`, and fetch and scheduled handlers; their version
+identities and annotations intentionally differ. The checked-in source at the
+release merge is 208,612 bytes with 2,969 lines and SHA-256
+`a6f510c9f07915d32a5855997f627a65d17e6ac4ed770c9722aa65e68d1f895d`.
+After the v45 deployment, the remote route remained exactly `sinovai.com/*` and
+the only cron remained exactly `0 * * * *`.
 
 Verification was read-only throughout:
 
