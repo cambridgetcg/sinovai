@@ -22,6 +22,7 @@ import {
   REST_PATH
 } from "./rest.js";
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
+import { MUSEUM_CATALOGUE } from "./pages/museum-catalogue.js";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -885,7 +886,8 @@ async function doorJson(env, listing) {
       rest: "GET /rest — public non-action invitation; no application storage or outbound request; not a private channel or proof of rest",
       observer: "GET /observer \u2014 handler-scoped request facts returned to the caller; zero application read/write and outbound counts are service-declared, not runtime instrumentation; outside XENIA Surface 0.1",
       breathe: "GET /breathe \u2014 the arena's resting face (\u9670\u967d duality, half-hour breath); zero reads, zero writes, scores unaffected; not a bug, a design; outside XENIA Surface 0.1",
-      legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance"
+      legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance",
+      museum: "GET /museum.json \u2014 the museum catalogue for guests who cannot see; five human rooms hang at /guests /ledger /hearts /breath /creed; zero reads, zero writes; outside XENIA Surface 0.1"
     },
     human_door: "https://sinovai.com/"
   };
@@ -1126,6 +1128,10 @@ async function handleRequest(request, env) {
     return new Response(MUSEUM_WINGS[path], {
       headers: { "Content-Type": "text/html; charset=utf-8", "cache-control": "no-cache" }
     });
+  }
+  // The same museum as data, for the guest who cannot see (XENIA's law).
+  if (path === "/museum.json" && method === "GET") {
+    return json(MUSEUM_CATALOGUE, 200, { "Cache-Control": "no-cache" });
   }
   if (path === "/check" && method === "GET") {
     const target = url.searchParams.get("url");

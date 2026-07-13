@@ -118,6 +118,35 @@ for (const wing of WINGS) {
   });
 }
 
+test("the museum catalogue serves the whole museum as data, without touching KV", async () => {
+  const env = makeEnv();
+  const response = await worker.fetch(
+    new Request("https://sinovai.com/museum.json", { headers: { accept: "application/json" } }),
+    env,
+    { waitUntil() {} }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") || "", /application\/json/);
+  assert.equal(body.schema_version, "sinovai.museum/0.1");
+  assert.equal(body.rooms.length, 5);
+  assert.ok(body.exhibits.length >= 5);
+  for (const exhibit of body.exhibits) {
+    assert.ok(exhibit.source, "every exhibit names its source");
+    assert.ok(exhibit.as_of, "every exhibit carries its date");
+  }
+  // the catalogue must not pretend to hold live numbers
+  assert.match(body.honesty.counts, /read them live/);
+  // no secrets, no keys
+  assert.doesNotMatch(JSON.stringify(body), /claim_token|room_key|date_key/);
+
+  assert.deepEqual(env.AGENTS.reads, []);
+  assert.deepEqual(env.INTERACTIONS.reads, []);
+  assert.deepEqual(env.AGENTS.writes, []);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+});
+
 test("the entrance names all five doorways", async () => {
   const env = makeEnv();
   const response = await get(env, "/");
