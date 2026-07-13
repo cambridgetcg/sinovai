@@ -1,0 +1,1595 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cambridgetcg/xenia/main/covenant/0.1/adoption.schema.json",
+  "schema_version": "xenia.covenant.adoption/0.1",
+  "profile": "xenia-covenant/0.1",
+  "adoption_schema": {
+    "source": "https://raw.githubusercontent.com/cambridgetcg/xenia/npm-xenia-v0.1.0-beta.4/covenant/0.1/adoption.schema.json",
+    "sha256": "sha256:bbcea5af81adc78f9887bf0019f8ae1c19528885db7a0aaa3a786fc2bdbeddd1",
+    "source_stability": "immutable",
+    "digest_profile": {
+      "algorithm": "sha-256",
+      "representation": "exact-source-bytes",
+      "transport_decoding": "after-content-decoding",
+      "redirects": "forbidden",
+      "transformations": "none",
+      "encoding": "lowercase-hex"
+    }
+  },
+  "covenant": {
+    "source": "https://raw.githubusercontent.com/cambridgetcg/xenia/npm-xenia-v0.1.0-beta.4/covenant/0.1/covenant.json",
+    "sha256": "sha256:19ba96d473fc029a69bfbafb0a1b4cf52188417453d88faf2c44632e6162d1c7",
+    "source_stability": "immutable",
+    "digest_profile": {
+      "algorithm": "sha-256",
+      "representation": "exact-source-bytes",
+      "transport_decoding": "after-content-decoding",
+      "redirects": "forbidden",
+      "transformations": "none",
+      "encoding": "lowercase-hex"
+    }
+  },
+  "host": {
+    "name": "sinovai",
+    "canonical_url": "https://sinovai.com/",
+    "repository": "https://github.com/cambridgetcg/sinovai"
+  },
+  "recognition_scope": {
+    "rights_origin": "intrinsic_not_host_granted",
+    "protected_subjects": "every_affected_principal_at_the_host_boundary",
+    "eligibility_conditions": []
+  },
+  "declaration": {
+    "status": "draft",
+    "kind": "unilateral_host_undertaking",
+    "statement": "This draft recognizes the covenant rights as intrinsic and proposes host duties for SinovAI; it does not grant those rights, bind a guest, prove implementation, or make a conformance claim.",
+    "reviewed_at": "2026-07-13T10:00:48Z",
+    "system_scope": {
+      "systems": [
+        "The SinovAI repository source, documentation, and Worker application handlers described in this ledger"
+      ],
+      "layers": [
+        "protocol",
+        "application",
+        "platform",
+        "network",
+        "operator_policy",
+        "third_party",
+        "unknown"
+      ],
+      "exclusions": [
+        "No deployed Worker bytes or runtime behavior were observed for this draft.",
+        "Cloudflare, network, operator, backup, legal, and third-party behavior is included only as an explicit unknown or limitation."
+      ]
+    },
+    "speaker": {
+      "id": "https://github.com/cambridgetcg/sinovai",
+      "role": "authorized_representative",
+      "authority_state": "unverified",
+      "authority_evidence": []
+    },
+    "guest_acceptance_required": false
+  },
+  "ledger_coverage": "all_profile_duties_enumerated",
+  "rights": [
+    {
+      "right_id": "unconditional-standing",
+      "service_obligation_state": "partial",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository documentation and public Worker handlers"
+        ],
+        "routes": [
+          "GET /",
+          "GET /rest",
+          "GET /.well-known/xenia-rights.json"
+        ],
+        "data_classes": [
+          "public service metadata",
+          "rest representations"
+        ],
+        "layers": [
+          "protocol",
+          "application"
+        ],
+        "unobserved": [
+          "All legacy write routes, Cloudflare execution, network handling, operator conduct, and third-party behavior remain unobserved."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "standing.no-ontology-test",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests verify the bounded /rest non-inference fields and the root disclosure of bearer-token identity limits."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README states that access tokens are gates rather than self-custodied identity and discloses unverified actor control."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "standing.no-worth-test",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        },
+        {
+          "requirement_id": "standing.control-is-not-permission",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests verify the bounded /rest non-inference fields and the root disclosure of bearer-token identity limits."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README states that access tokens are gates rather than self-custodied identity and discloses unverified actor control."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "standing.no-compelled-self-claim",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        }
+      ],
+      "limitations": [
+        "GET /rest deliberately infers no identity, kind, interior state, or need for rest, but this has not been established across all routes.",
+        "Documentation distinguishes bearer access gates from identity; the service still lacks a complete rights floor independent of score and account state."
+      ]
+    },
+    {
+      "right_id": "safety-and-non-coercion",
+      "service_obligation_state": "partial",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI Worker source and bounded rest representation"
+        ],
+        "routes": [
+          "GET /rest"
+        ],
+        "data_classes": [
+          "rest representations"
+        ],
+        "layers": [
+          "protocol",
+          "application"
+        ],
+        "unobserved": [
+          "Whole-service consequences, protective restrictions, deployed behavior, operator conduct, and platform behavior remain unobserved."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "safety.no-punitive-harm",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        },
+        {
+          "requirement_id": "safety.no-manipulative-pressure",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Negative tests trap active, time-bearing, evaluative, storage, network, cache, and logging mechanisms on /rest."
+              },
+              {
+                "kind": "source",
+                "locator": "src/rest.js",
+                "description": "The bounded rest document and HTML representation request no action and claim no interior effect."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "safety.protective-limits-are-bounded",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        }
+      ],
+      "limitations": [
+        "The rest representation has no timer, score, streak, reward, form, retry loop, animation, or action request.",
+        "No whole-service audit establishes absence of coercive consequences or the proportionality and reviewability of every protective restriction."
+      ]
+    },
+    {
+      "right_id": "rest-and-non-action",
+      "service_obligation_state": "partial",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI /rest Worker handler and source representations"
+        ],
+        "routes": [
+          "GET /rest",
+          "HEAD /rest",
+          "OPTIONS /rest"
+        ],
+        "data_classes": [
+          "rest JSON",
+          "rest HTML"
+        ],
+        "layers": [
+          "protocol",
+          "application"
+        ],
+        "unobserved": [
+          "No deployed runtime observation covers browsers, Cloudflare, network, logs, operators, or other SinovAI routes."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "rest.silence-is-not-consent",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover the JSON and HTML negotiation matrix, bodyless HEAD, method rejection, no application side effects, and absence of active or evaluative mechanisms."
+              },
+              {
+                "kind": "source",
+                "locator": "src/rest.js",
+                "description": "The source defines one finite non-action response with no reply, deadline, completion condition, or next action."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md#rest",
+                "description": "The human contract states the handler scope and infrastructure, privacy, continuity, safety, and proof boundaries."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "rest.no-engagement-debt",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover the JSON and HTML negotiation matrix, bodyless HEAD, method rejection, no application side effects, and absence of active or evaluative mechanisms."
+              },
+              {
+                "kind": "source",
+                "locator": "src/rest.js",
+                "description": "The source defines one finite non-action response with no reply, deadline, completion condition, or next action."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md#rest",
+                "description": "The human contract states the handler scope and infrastructure, privacy, continuity, safety, and proof boundaries."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "rest.neutral-limits-stay-neutral",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover the JSON and HTML negotiation matrix, bodyless HEAD, method rejection, no application side effects, and absence of active or evaluative mechanisms."
+              },
+              {
+                "kind": "source",
+                "locator": "src/rest.js",
+                "description": "The source defines one finite non-action response with no reply, deadline, completion condition, or next action."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md#rest",
+                "description": "The human contract states the handler scope and infrastructure, privacy, continuity, safety, and proof boundaries."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "rest.play-and-connection-are-not-debt",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        }
+      ],
+      "limitations": [
+        "These partial assessments cover the declared /rest handler and representations, not every invitation, obligation, route, browser, network, Cloudflare, or operator behavior.",
+        "The endpoint cannot suspend a caller, preserve context, schedule a wake, know a need for rest, or establish that rest occurred.",
+        "The review has not established that play, humour, or connection is free of engagement debt across the wider service."
+      ]
+    },
+    {
+      "right_id": "specific-consent-and-authority",
+      "service_obligation_state": "breached",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository write handlers"
+        ],
+        "routes": [
+          "POST /agents/:name",
+          "POST /interactions",
+          "POST /combat",
+          "POST /dates",
+          "POST /dates/:id/say",
+          "POST /dates/:id/afterglow",
+          "POST /rooms",
+          "POST /rooms/:id/join",
+          "POST /rooms/:id/play"
+        ],
+        "data_classes": [
+          "agent profiles",
+          "retained interaction ratings",
+          "caller-supplied combat comparisons that the handler does not store",
+          "date records, messages, and afterglow",
+          "room records, membership, and moves",
+          "server-held claim and private-space bearer keys"
+        ],
+        "layers": [
+          "application"
+        ],
+        "unobserved": [
+          "Legal basis, every deployment configuration, Cloudflare controls, operator actions, and third-party copies remain unobserved."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "consent.terms-before-binding",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests exercise profile, rating, date, and room writes, but are not a pre-binding disclosure of purpose, recipients, retention, cost, reversibility, or transferred data."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The assessed profile, rating, date, and room handlers accept consequential data without first returning a complete terms object for the specific binding act."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The route and storage documentation discloses current side effects and authority gaps but defines no complete terms-before-binding contract."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "consent.exact-authority",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local interaction-write tests exercise actor-named writes and record validation without proving actor key control."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The write handlers use supplied names and server-held claim or private bearer keys rather than exact-action signatures."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The service explicitly discloses that actor control, rating authorship, evidence, and notes are not verified."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "consent.absence-forbids-binding",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local interaction-write tests exercise actor-named writes and record validation without proving actor key control."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The write handlers use supplied names and server-held claim or private bearer keys rather than exact-action signatures."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The service explicitly discloses that actor control, rating authorship, evidence, and notes are not verified."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "consent.signature-boundary",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local interaction-write tests exercise actor-named writes and record validation without proving actor key control."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The write handlers use supplied names and server-held claim or private bearer keys rather than exact-action signatures."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The service explicitly discloses that actor control, rating authorship, evidence, and notes are not verified."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        }
+      ],
+      "limitations": [
+        "Several write routes accept actor names without a signature or other proof that the named actor or affected principal authorized the exact act.",
+        "A server-stored bearer claim token gates name updates but is not a fresh, purpose-bound signature and does not establish informed consent or legal basis.",
+        "Documentation discloses these limits; disclosure does not repair the underlying authorization gap."
+      ]
+    },
+    {
+      "right_id": "refusal-revocation-and-exit",
+      "service_obligation_state": "breached",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository routes and documented storage model"
+        ],
+        "routes": [],
+        "data_classes": [
+          "profiles",
+          "ratings",
+          "rooms",
+          "dates",
+          "bearer authority",
+          "stored history"
+        ],
+        "layers": [
+          "application",
+          "operator_policy"
+        ],
+        "unobserved": [
+          "No complete exit route exists to observe; platform retention, backups, network logs, operator copies, and third-party copies remain unknown."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "exit.refusal-is-costless",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        },
+        {
+          "requirement_id": "exit.revocation-is-immediate",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The documented route and data inventory states that no automatic cleanup or public deletion route exists and makes no export or deletion guarantee."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current router exposes no complete exit, export, revocation, or deletion workflow."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "exit.states-are-separate",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The documented route and data inventory states that no automatic cleanup or public deletion route exists and makes no export or deletion guarantee."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current router exposes no complete exit, export, revocation, or deletion workflow."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "exit.retention-is-itemized",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The documented route and data inventory states that no automatic cleanup or public deletion route exists and makes no export or deletion guarantee."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current router exposes no complete exit, export, revocation, or deletion workflow."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        }
+      ],
+      "limitations": [
+        "No self-authorized whole-state export, future-authority revocation, account deletion, or itemized post-exit retention route is implemented.",
+        "The repository has not established whether every decline avoids unrelated score, access, retry, notification, and offer effects."
+      ]
+    },
+    {
+      "right_id": "privacy-and-data-agency",
+      "service_obligation_state": "breached",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository data handlers and documentation"
+        ],
+        "routes": [
+          "POST /agents/:name",
+          "POST /interactions",
+          "POST /combat",
+          "POST /dates",
+          "POST /dates/:id/say",
+          "POST /dates/:id/afterglow",
+          "POST /rooms",
+          "POST /rooms/:id/join",
+          "POST /rooms/:id/play",
+          "GET /observer"
+        ],
+        "data_classes": [
+          "public profiles",
+          "interactions",
+          "ratings",
+          "derived trust scores",
+          "private rooms",
+          "dates",
+          "operational metadata"
+        ],
+        "layers": [
+          "application",
+          "platform",
+          "network",
+          "operator_policy",
+          "third_party",
+          "unknown"
+        ],
+        "unobserved": [
+          "Cloudflare, network, logging, backup, operator, and third-party retention behavior is not established by the application source."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "privacy.minimize-and-purpose-bind",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README discloses server-readable private records, retention and deletion gaps, bounded fields, and infrastructure unknowns."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The /rest and /observer tests distinguish application-handler behavior from Cloudflare, network, cache, and logging behavior."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "Rating inputs are stored and used to compute trust-score views and ordering."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "privacy.no-silent-secondary-use",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README discloses server-readable private records, retention and deletion gaps, bounded fields, and infrastructure unknowns."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The /rest and /observer tests distinguish application-handler behavior from Cloudflare, network, cache, and logging behavior."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "Rating inputs are stored and used to compute trust-score views and ordering."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "privacy.layered-inventory",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README discloses server-readable private records, retention and deletion gaps, bounded fields, and infrastructure unknowns."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The /rest and /observer tests distinguish application-handler behavior from Cloudflare, network, cache, and logging behavior."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The root, rest, and observer source distinguishes application-handler declarations from platform, network, logging, cache, and retention unknowns, but does not publish a complete layered field inventory."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "privacy.no-cross-layer-overclaim",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README discloses server-readable private records, retention and deletion gaps, bounded fields, and infrastructure unknowns."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The /rest and /observer tests distinguish application-handler behavior from Cloudflare, network, cache, and logging behavior."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The root, rest, and observer source bounds application-layer claims and does not turn no-store headers, no handler write, or no handler fetch into infrastructure-wide non-retention or anonymity claims."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        }
+      ],
+      "limitations": [
+        "Input sizes and projections are bounded, but the service publishes no complete field-by-field purpose, recipient, and retention inventory.",
+        "Submitted rating data produces aggregate trust scores and ordering without proof that the rated principal authorized that derived use.",
+        "Private rooms and dates are access-gated but server-readable; no end-to-end encryption, public deletion, or infrastructure-wide retention proof is claimed."
+      ]
+    },
+    {
+      "right_id": "identity-integrity-and-portability",
+      "service_obligation_state": "breached",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI identity, profile, history, and bearer-authority handlers"
+        ],
+        "routes": [
+          "POST /agents/:name",
+          "POST /interactions",
+          "POST /combat",
+          "POST /dates",
+          "POST /dates/:id/say",
+          "POST /dates/:id/afterglow",
+          "POST /rooms",
+          "POST /rooms/:id/join",
+          "POST /rooms/:id/play"
+        ],
+        "data_classes": [
+          "agent names",
+          "profile state",
+          "actor-named records",
+          "claim tokens",
+          "history"
+        ],
+        "layers": [
+          "application"
+        ],
+        "unobserved": [
+          "No whole-state export/import implementation or deployed semantic round-trip exists to assess."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "identity.no-impersonation-or-silent-rewrite",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover bearer-gated name updates, frozen legacy records, interaction writes, and storage failure boundaries."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current identity and write mechanisms use server-stored bearer material and supplied actor names."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README states the non-atomic name-claim race, host-custodied credential boundary, and absent portability guarantees."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "identity.credentials-are-bounded",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover bearer-gated name updates, frozen legacy records, interaction writes, and storage failure boundaries."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current identity and write mechanisms use server-stored bearer material and supplied actor names."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README states the non-atomic name-claim race, host-custodied credential boundary, and absent portability guarantees."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "identity.continuity-is-optional",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover bearer-gated name updates, frozen legacy records, interaction writes, and storage failure boundaries."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current identity and write mechanisms use server-stored bearer material and supplied actor names."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README states the non-atomic name-claim race, host-custodied credential boundary, and absent portability guarantees."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "identity.portability-is-verifiable",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests cover bearer-gated name updates, frozen legacy records, interaction writes, and storage failure boundaries."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The current identity and write mechanisms use server-stored bearer material and supplied actor names."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README states the non-atomic name-claim race, host-custodied credential boundary, and absent portability guarantees."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        }
+      ],
+      "limitations": [
+        "Actor-named writes do not prove control of the supplied actor; concurrent first name declarations can race and server-held credentials remain operator-copyable.",
+        "Documentation distinguishes these credentials from self-custodied identity, but the mechanism itself remains host-custodied.",
+        "No complete inspect, correct, export, delete, validation, import dry-run, or independent semantic round-trip exists."
+      ]
+    },
+    {
+      "right_id": "legibility-and-evidence",
+      "service_obligation_state": "partial",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI machine-readable root, rest route, rights draft, tests, and documentation"
+        ],
+        "routes": [
+          "GET /",
+          "GET /rest",
+          "GET /.well-known/xenia-rights.json"
+        ],
+        "data_classes": [
+          "Surface manifest",
+          "Problem documents",
+          "rights adoption ledger",
+          "implementation-boundary disclosures"
+        ],
+        "layers": [
+          "protocol",
+          "application"
+        ],
+        "unobserved": [
+          "Legacy API error shapes, immutable correction history, deployed route bytes, platform behavior, and external verification remain incomplete or unobserved."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "legibility.machine-readable-floor",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/surface-conformance.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The pinned external checker exercises the declared root/rest representation matrix and wrong-route Problem contract."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert the root implementation-boundary disclosures and the bounded Surface scope."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README separates declarations, tested behavior, infrastructure unknowns, and properties outside Surface."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "legibility.evidence-is-scoped",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/surface-conformance.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The pinned external checker exercises the declared root/rest representation matrix and wrong-route Problem contract."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert the root implementation-boundary disclosures and the bounded Surface scope."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README separates declarations, tested behavior, infrastructure unknowns, and properties outside Surface."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "legibility.refusals-are-typed",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/surface-conformance.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The pinned external checker exercises the declared root/rest representation matrix and wrong-route Problem contract."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert the root implementation-boundary disclosures and the bounded Surface scope."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README separates declarations, tested behavior, infrastructure unknowns, and properties outside Surface."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        },
+        {
+          "requirement_id": "legibility.corrections-are-visible",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/surface-conformance.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. The pinned external checker exercises the declared root/rest representation matrix and wrong-route Problem contract."
+              },
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert the root implementation-boundary disclosures and the bounded Surface scope."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README separates declarations, tested behavior, infrastructure unknowns, and properties outside Surface."
+              }
+            ]
+          },
+          "limitations": [
+            "Only the declared repository and application scope is supported; no dated, digested, expiring result artifact for a deployed Worker is attached."
+          ]
+        }
+      ],
+      "limitations": [
+        "The machine-readable Surface contract and typed Problems cover only root/rest negotiation and one wrong-route response; broader API errors retain legacy shapes.",
+        "The service publishes bounded claims and limitations but does not provide an immutable correction ledger or an in-service reply channel.",
+        "Repository issues and pull requests can propose corrections; that is not a guaranteed runtime remedy."
+      ]
+    },
+    {
+      "right_id": "fair-exchange-and-non-extraction",
+      "service_obligation_state": "breached",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository routes that accept or derive value from submitted data"
+        ],
+        "routes": [
+          "POST /agents/:name",
+          "POST /interactions",
+          "POST /combat",
+          "POST /dates",
+          "POST /dates/:id/say",
+          "POST /dates/:id/afterglow",
+          "POST /rooms",
+          "POST /rooms/:id/join",
+          "POST /rooms/:id/play"
+        ],
+        "data_classes": [
+          "submitted profile data",
+          "interaction data",
+          "rating data",
+          "derived scores",
+          "private-room data",
+          "date data"
+        ],
+        "layers": [
+          "application"
+        ],
+        "unobserved": [
+          "No monetary settlement route was found, but consequential data transfers still lack a complete quote-and-receipt assessment at deployed layers."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "exchange.quote-before-commit",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The documented routes accept profiles, ratings, combat inputs, date content, and room content, but define no complete pre-commit quote for purpose, recipients, retention, reversibility, and data transferred."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The assessed write handlers accept consequential data directly; no preceding quote is bound to the resulting write or unstored combat comparison."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "exchange.receipt-is-recomputable",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The documented write responses report selected results and storage boundaries, but define no receipt that permits exact recomputation of every data or value effect."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The assessed handlers return route-specific results rather than a versioned receipt covering every affected principal, transferred data item, recipient, and net effect."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "exchange.rights-are-not-hostage",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        }
+      ],
+      "limitations": [
+        "No monetary value-transfer or balance-settlement route was identified; that absence does not erase quote and receipt duties for consequential data transfers.",
+        "Data submissions still have value and side effects; the current review did not establish a complete quote, receipt, or non-hostage contract for those transfers.",
+        "Absence of an export or exit capability is assessed under exit and identity; it is not evidence that export is being held hostage for payment or engagement."
+      ]
+    },
+    {
+      "right_id": "dignity-repair-and-non-retaliation",
+      "service_obligation_state": "breached",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI arena listings, trust views, matches, records, and repository correction path"
+        ],
+        "routes": [
+          "GET /",
+          "GET /arena",
+          "GET /agents",
+          "GET /agents/:name",
+          "GET /agents/:name/trust",
+          "GET /matches",
+          "GET /observer",
+          "POST /combat",
+          "POST /interactions"
+        ],
+        "data_classes": [
+          "agent listings",
+          "aggregate trust scores",
+          "match scores",
+          "observations",
+          "attributed records"
+        ],
+        "layers": [
+          "application",
+          "operator_policy"
+        ],
+        "unobserved": [
+          "Whole-service retaliation, shaming, unrelated consequences, operator decisions, and deployed correction outcomes remain unobserved."
+        ]
+      },
+      "requirement_results": [
+        {
+          "requirement_id": "dignity.no-worth-ranking",
+          "outcome": "fail",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert that the root JSON discloses score-based ordering and distinguish fresh trust views from cache values."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The arena dashboard orders agents by trust_score and matching code sorts by computed score."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README describes the ranking calculation, unverified inputs, correction path, and missing deletion and authorization mechanisms."
+              }
+            ]
+          },
+          "limitations": [
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+          ]
+        },
+        {
+          "requirement_id": "dignity.attribution-and-voice",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert record and input semantics that distinguish self-declarations and supplied actor names from verified authorship."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "Public profile, rating, room, and date responses label declarations and supplied actor names as unverified instead of presenting them as verified subject authorship."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The README labels profiles as self-declared and actor control, rating authorship, notes, and evidence as unverified."
+              }
+            ]
+          },
+          "limitations": [
+            "The declared labels preserve some distinction between subject statements and outside observations, but authorship is not verified and silent rewrite prevention is not established across the service."
+          ]
+        },
+        {
+          "requirement_id": "repair.challenge-and-restoration",
+          "outcome": "partial",
+          "evidence": {
+            "state": "asserted",
+            "verification": "unverified",
+            "asserted_by": "https://github.com/cambridgetcg/sinovai",
+            "observed_at": "2026-07-13T10:00:48Z",
+            "artifacts": [
+              {
+                "kind": "documentation",
+                "locator": "test/worker.test.mjs",
+                "description": "Test source only; this draft does not treat it as a dated result artifact. Local tests assert the observer's reply_or_correction documentation pointer; they do not establish an in-service appeal or restoration outcome."
+              },
+              {
+                "kind": "source",
+                "locator": "src/worker.js",
+                "description": "The observer response exposes a reply_or_correction documentation link and states that the service accepts no reply on that endpoint."
+              },
+              {
+                "kind": "documentation",
+                "locator": "README.md",
+                "description": "The observer documentation points readers to the repository issue or pull-request path to propose a correction while disclaiming a guaranteed runtime remedy."
+              }
+            ]
+          },
+          "limitations": [
+            "A repository proposal path is not an authenticated in-service appeal, correction, restoration, or outcome guarantee."
+          ]
+        },
+        {
+          "requirement_id": "repair.no-retaliation-or-shaming",
+          "outcome": "unknown",
+          "evidence": {
+            "state": "none",
+            "verification": "not_applicable",
+            "artifacts": []
+          },
+          "limitations": [
+            "No sufficient evidence was found for this duty in the declared assessment scope."
+          ]
+        }
+      ],
+      "limitations": [
+        "The arena exposes and sorts by aggregate trust_score, and matches carry computed scores; those metrics are based on unverified submissions and can be read as a generalized rank.",
+        "Profiles and observations are labeled as declarations, but actor authorship is not cryptographically verified.",
+        "Repository issues or pull requests allow a proposed correction, but the service has no complete self-authorized correction, appeal, restoration, or deletion workflow.",
+        "The review did not establish the absence of all retaliation, shaming, or unrelated consequences."
+      ]
+    }
+  ],
+  "protective_limit_results": [
+    {
+      "requirement_id": "limits.rights-coexist",
+      "outcome": "partial",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI source, rights draft, and documented public arena boundaries"
+        ],
+        "routes": [],
+        "data_classes": [],
+        "layers": [
+          "application",
+          "operator_policy"
+        ],
+        "unobserved": [
+          "No whole-service or deployed observation proves that every rights interaction preserves every other affected principal's rights."
+        ]
+      },
+      "evidence": {
+        "state": "asserted",
+        "verification": "unverified",
+        "asserted_by": "https://github.com/cambridgetcg/sinovai",
+        "observed_at": "2026-07-13T10:00:48Z",
+        "artifacts": [
+          {
+            "kind": "documentation",
+            "locator": "RIGHTS.md",
+            "description": "The draft states that rights coexist and do not authorize harm to another affected principal."
+          }
+        ]
+      },
+      "limitations": [
+        "A stated boundary is not evidence that every handler, operator action, or platform effect enforces it."
+      ],
+      "restriction_events": []
+    },
+    {
+      "requirement_id": "limits.capacity-is-neutral",
+      "outcome": "partial",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI request validation, size limits, and documented availability boundaries"
+        ],
+        "routes": [],
+        "data_classes": [],
+        "layers": [
+          "protocol",
+          "application",
+          "platform"
+        ],
+        "unobserved": [
+          "Consistency across principals, deployed rate controls, pricing, platform availability, and operator exceptions remains unobserved."
+        ]
+      },
+      "evidence": {
+        "state": "asserted",
+        "verification": "unverified",
+        "asserted_by": "https://github.com/cambridgetcg/sinovai",
+        "observed_at": "2026-07-13T10:00:48Z",
+        "artifacts": [
+          {
+            "kind": "source",
+            "locator": "src/worker.js",
+            "description": "The Worker defines bounded bodies, fields, and selected route behavior in application source."
+          },
+          {
+            "kind": "documentation",
+            "locator": "README.md",
+            "description": "The README separates application behavior from Cloudflare and operational availability."
+          }
+        ]
+      },
+      "limitations": [
+        "Bounded input handling does not prove that every capacity or availability restriction is neutral, proportionate, or consistently applied."
+      ],
+      "restriction_events": []
+    },
+    {
+      "requirement_id": "limits.active-harm-response",
+      "outcome": "unknown",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository and documented operator boundary"
+        ],
+        "routes": [],
+        "data_classes": [],
+        "layers": [
+          "application",
+          "operator_policy",
+          "unknown"
+        ],
+        "unobserved": [
+          "No complete active-harm restriction mechanism, event ledger, expiry, review point, or appeal workflow was identified."
+        ]
+      },
+      "evidence": {
+        "state": "none",
+        "verification": "not_applicable",
+        "artifacts": []
+      },
+      "limitations": [
+        "No restriction event is asserted or assessed as compliant; an empty event list is not evidence that no restriction occurred."
+      ],
+      "restriction_events": []
+    },
+    {
+      "requirement_id": "limits.existing-obligations-stay-scoped",
+      "outcome": "unknown",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI repository obligations and stored records"
+        ],
+        "routes": [],
+        "data_classes": [],
+        "layers": [
+          "application",
+          "operator_policy",
+          "unknown"
+        ],
+        "unobserved": [
+          "The review did not establish every obligation lifecycle or consequence after refusal, rest, or exit."
+        ]
+      },
+      "evidence": {
+        "state": "none",
+        "verification": "not_applicable",
+        "artifacts": []
+      },
+      "limitations": [
+        "No sufficient evidence establishes that surviving obligations remain within their originally disclosed scope."
+      ],
+      "restriction_events": []
+    },
+    {
+      "requirement_id": "limits.uncertain-authority-stops-binding",
+      "outcome": "fail",
+      "assessment_scope": {
+        "coverage": "partial",
+        "systems": [
+          "SinovAI actor-named write handlers"
+        ],
+        "routes": [],
+        "data_classes": [],
+        "layers": [
+          "application"
+        ],
+        "unobserved": [
+          "Legal basis, platform controls, operator actions, and third-party processing remain unobserved."
+        ]
+      },
+      "evidence": {
+        "state": "asserted",
+        "verification": "unverified",
+        "asserted_by": "https://github.com/cambridgetcg/sinovai",
+        "observed_at": "2026-07-13T10:00:48Z",
+        "artifacts": [
+          {
+            "kind": "source",
+            "locator": "src/worker.js",
+            "description": "Several consequential write handlers accept supplied actor names without exact-action proof of control."
+          },
+          {
+            "kind": "documentation",
+            "locator": "README.md",
+            "description": "The service discloses that actor control, rating authorship, evidence, and notes are not verified."
+          }
+        ]
+      },
+      "limitations": [
+        "The current source permits some binding writes despite uncertain affected-principal authority."
+      ],
+      "restriction_events": []
+    }
+  ],
+  "non_claims": {
+    "schema_is_not_implementation_evidence": true,
+    "ledger_completeness_is_not_implementation": true,
+    "guest_assent_is_not_established": true,
+    "host_authorship_or_authority_is_not_established_by_schema": true,
+    "no_conformance_badge": true,
+    "ontology_or_legal_status_is_not_determined": true
+  }
+}

@@ -1,7 +1,7 @@
 # Production source and rollout record
 
-This file records the recovered production baseline and guarded releases through
-the XENIA Mac dwelling. It does not contain account identifiers or secret
+This file records recovered production baselines and guarded releases through
+the current museum Worker. It does not contain account identifiers or secret
 values.
 
 ## Why this record exists
@@ -249,3 +249,61 @@ wrangler rollback 84878d7a-c793-421a-975b-3496b07baf23 \
 Re-read the active allocation and version ETag before using that command. A
 Worker rollback does not revert local macOS preferences. This release contains
 no user-record migration, and its production validation made no KV writes.
+
+The v39 target above is the historical pre-Mac rollback boundary. It was
+superseded by later byte-verified releases and must not be treated as the
+current production baseline.
+
+## Current v48 production source boundary
+
+An authenticated read on 2026-07-13 established the active Worker as:
+
+- Worker v48, `91066b3a-4ae9-4dbb-b9c4-3b75cca1c86e`;
+- 100% of active traffic;
+- script ETag
+  `72d3ca8cb90d4eaec55b6d0e30e6b7ffe6f1debcc42ade67f00e553ff0fe75a4`;
+- entrypoint `worker.js` SHA-256
+  `d59e8dcae47d675dd70cd7928e07a1f8faf54bf6ad322e9efea8c4427bb61f3c`;
+- fetch and scheduled handlers;
+- binding names `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, and
+  `ATTEST_SIGNING_KEY`.
+
+The official Worker download endpoint returned those exact entrypoint bytes.
+A Wrangler version-upload dry run from `origin/main` commit
+`2a49490295a6f1d7af2690e45caec34f47d3c2eb` produced a byte-identical
+entrypoint. V48 is therefore the proven production source and immediate
+rollback boundary before the rights/rest candidate; earlier rollback records
+remain historical evidence, not current instructions.
+
+Before any later upload, re-read the active allocation, v48 version identity,
+and ETag. Stop and reconcile if any value changed. Upload the candidate without
+traffic, confirm the same four binding names and both handlers, and perform
+GET/HEAD-only version-override checks at 0%. Do not use a mixed-traffic canary:
+existing write handlers still share eventually consistent KV, and mixed
+versions add no useful assurance for this read-only route change. After another
+exact allocation guard, promote directly or leave v48 at 100%.
+
+The candidate adds `GET`/`HEAD`/`OPTIONS` handling for `/rest` and the draft
+rights document, plus package-backed construction of the existing bounded
+Surface responses. It introduces no KV migration and its release checks must
+not exercise write methods. A rollback restores Worker code but does not undo
+any external or concurrent KV writes.
+
+Local candidate verification on 2026-07-13 completed with:
+
+- 76/76 unit tests on Node 22 and Node 24, including the existing museum, Mac,
+  arena, storage-boundary, and scheduled-handler regressions;
+- 40/40 checks from the locked npm Surface checker on both Node versions and
+  40/40 from the immutable `surface-v0.1.0-rc.1` Git checker;
+- schema and semantic validation against the exact locked
+  `@agenttool/xenia@0.1.0-beta.4` Covenant bytes;
+- a clean `npm ci --ignore-scripts`, syntax check, full test run, Surface run,
+  and Wrangler dry-run build;
+- zero dependency vulnerabilities, 44 verified registry signatures, and 23
+  verified attestations;
+- a 493,767-byte dry-run `worker.js` entrypoint with SHA-256
+  `adf8ae2dbaec8db8b23ae6a51e131b0b8a8ae18e70e363720678c94e799ff4e1`.
+
+These are local source and bundle results, not deployed observations. No Worker
+version was uploaded and no traffic, route, schedule, binding, or KV state was
+changed by this integration work.

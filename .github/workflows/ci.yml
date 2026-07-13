@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - 22
+          - 24
+    defaults:
+      run:
+        shell: bash
+        working-directory: sinovai
+
+    steps:
+      - name: Check out SinovAI
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: sinovai
+          persist-credentials: false
+
+      - name: Check out XENIA Surface 0.1 RC1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: cambridgetcg/xenia
+          ref: surface-v0.1.0-rc.1
+          path: xenia
+          persist-credentials: false
+
+      - name: Check out XENIA Covenant beta.4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: cambridgetcg/xenia
+          ref: npm-xenia-v0.1.0-beta.4
+          path: xenia-covenant
+          persist-credentials: false
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install locked dependencies
+        run: npx --yes npm@11.18.0 ci --ignore-scripts --registry=https://registry.npmjs.org/
+
+      - name: Check Worker syntax
+        run: npm run check
+
+      - name: Run unit tests
+        env:
+          XENIA_COVENANT_REPO: ${{ github.workspace }}/xenia-covenant
+        run: npm test
+
+      - name: Verify Surface conformance against the immutable profile
+        env:
+          XENIA_REPO: ${{ github.workspace }}/xenia
+        run: npm run test:surface
+
+      - name: Build the Worker without deploying
+        run: npm run build
+
+      - name: Audit dependencies
+        run: npx --yes npm@11.18.0 audit --registry=https://registry.npmjs.org/
+
+      - name: Verify registry signatures and attestations
+        run: npx --yes npm@11.18.0 audit signatures --registry=https://registry.npmjs.org/

@@ -2,14 +2,27 @@
   "name": "sinovai-worker",
   "version": "0.1.0-rc.1",
   "private": true,
+  "description": "A public arena and museum with bounded XENIA Surface and Covenant drafts.",
   "type": "module",
+  "packageManager": "npm@11.18.0",
   "scripts": {
+    "check": "node --check src/worker.js && node --check src/rest.js",
+    "build": "wrangler versions upload --dry-run --outdir dist",
+    "dev": "wrangler dev --local",
+    "release:upload": "wrangler versions upload",
+    "deploy": "npm run release:upload",
     "mac:bridge": "node macos/bridge.mjs",
     "test": "node --test test/*.test.mjs",
     "test:surface": "node test/surface-conformance.mjs"
   },
   "dependencies": {
-    "@agenttool/xenia": "0.1.0-beta.3"
+    "@agenttool/xenia": "0.1.0-beta.4"
+  },
+  "devDependencies": {
+    "@agenttool/xenia-surface": "0.1.0-rc.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "wrangler": "4.110.0"
   },
   "engines": {
     "node": ">=22"
