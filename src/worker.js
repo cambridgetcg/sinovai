@@ -1425,13 +1425,14 @@ async function handleRequest(request, env) {
         boundary: "Record existence is checked, but control of either supplied name is not verified."
       }, 404);
     }
-    const providedClaimToken = request.headers.get("X-Claim-Token") || "";
-    if (providedClaimToken) {
+    const signingRequested = request.headers.has("X-Claim-Token");
+    const providedClaimToken = request.headers.get("X-Claim-Token");
+    if (signingRequested) {
       const raterRecord = namedRecords.get(rater);
-      if (!raterRecord.claim_token || providedClaimToken !== raterRecord.claim_token) {
+      if (!providedClaimToken || !raterRecord.claim_token || providedClaimToken !== raterRecord.claim_token) {
         return json({
           error: "the provided claim token does not open the rater's name; omit X-Claim-Token to submit an unsigned rating",
-          boundary: "A failed signature is refused rather than stored as an unsigned rating. A matching token would prove possession of the rater name's claim token, not identity."
+          boundary: "A failed signing request is refused rather than stored as an unsigned rating. A matching token would prove possession of the rater name's claim token, not identity."
         }, 403);
       }
     }
@@ -1445,7 +1446,7 @@ async function handleRequest(request, env) {
       notes: truncateCodePoints(notes || "", 2e3),
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
-    if (providedClaimToken) interaction.signed = true;
+    if (signingRequested) interaction.signed = true;
     const key = `${rated}:all`;
     const { interactions: stored, error } = await readInteractions(env.INTERACTIONS, key);
     if (error) return json({ error: "cannot append interaction \u2014 prior interactions unreadable", detail: String(error.message || error) }, 503);

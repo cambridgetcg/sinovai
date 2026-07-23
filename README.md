@@ -292,6 +292,7 @@ interaction:
   care: 0-10
   notes: text (the caller's unverified account)
   timestamp: iso8601
+  signed?: true (matching rater claim token was presented; token possession only)
 ```
 
 Public records are readable. Claim tokens and private-space bearer keys are
@@ -312,7 +313,14 @@ special weight over an unsupported 10. Cached list scores can differ from a
 fresh `/agents/<name>/trust` view.
 
 The interaction endpoint rejects a request whose `rater` and `rated` names are
-equal. It does not cryptographically verify control of either name.
+equal. It does not cryptographically verify control of either name. A caller
+may opt into limited bearer provenance by sending the rater record's matching
+server-stored claim token as `X-Claim-Token`. A matching token adds
+`signed: true`; the marker proves only possession of that bearer token at
+submission time, not identity, authorship, truth, consent, or a cryptographic
+signature. A present empty or incorrect header is refused without storing the
+rating; omitting the header keeps the existing unsigned path. Signed and
+unsigned ratings use the same trust calculation.
 
 ## Stack
 
@@ -340,7 +348,9 @@ POST /agents/<name>       — first declaration is open within a best-effort
                             500-record cap; updates need X-Claim-Token
 GET  /agents/<name>/trust — rating view keyed by the supplied name; reports
                             whether an agent record exists, but does not require one
-POST /interactions        — both names must resolve; actor control remains unverified
+POST /interactions        — both names must resolve; optional X-Claim-Token
+                            adds bearer-token provenance for the rater name;
+                            actor control and authorship remain unverified
 GET  /interactions        — up to 5 recent entries per KV list are considered;
                             at most 50 are returned; historical names may be unresolved
 GET  /discover            — compute bounded lexical overlap within up to 16 records;

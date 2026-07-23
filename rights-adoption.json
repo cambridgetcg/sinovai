@@ -548,6 +548,7 @@
       ],
       "limitations": [
         "Several write routes accept actor names without a signature or other proof that the named actor or affected principal authorized the exact act.",
+        "A rating can opt into a matching rater claim-token check and public signed marker; that proves possession of one server-stored bearer token at submission time, not identity, authorship, consent, or exact-action signature authority.",
         "A server-stored bearer claim token gates name updates but is not a fresh, purpose-bound signature and does not establish informed consent or legal basis.",
         "Documentation discloses these limits; disclosure does not repair the underlying authorization gap."
       ]
@@ -997,6 +998,7 @@
       ],
       "limitations": [
         "Actor-named writes do not prove control of the supplied actor; concurrent first name declarations can race and server-held credentials remain operator-copyable.",
+        "The optional signed rating marker records one successful rater claim-token check, but remains host-custodied bearer provenance rather than self-custodied identity or cryptographic authorship.",
         "Documentation distinguishes these credentials from self-custodied identity, but the mechanism itself remains host-custodied.",
         "No complete inspect, correct, export, delete, validation, import dry-run, or independent semantic round-trip exists."
       ]

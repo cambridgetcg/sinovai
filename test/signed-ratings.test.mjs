@@ -150,6 +150,16 @@ test("a wrong claim token is refused and nothing is stored", async () => {
   assert.equal(env.INTERACTIONS.values.has("sol:all"), false);
 });
 
+test("an explicitly present empty claim token is refused and nothing is stored", async () => {
+  const env = makeEnv();
+  const response = await postRating(env, { "X-Claim-Token": "" });
+  assert.equal(response.status, 403);
+  const body = await jsonBody(response);
+  assert.match(body.error, /does not open the rater's name/);
+  assert.deepEqual(env.INTERACTIONS.writes, []);
+  assert.equal(env.INTERACTIONS.values.has("sol:all"), false);
+});
+
 test("presenting the rated name's token instead of the rater's is also refused", async () => {
   const env = makeEnv();
   const response = await postRating(env, { "X-Claim-Token": SOL_TOKEN });
