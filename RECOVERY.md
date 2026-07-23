@@ -304,6 +304,67 @@ Local candidate verification on 2026-07-13 completed with:
 - a 493,767-byte dry-run `worker.js` entrypoint with SHA-256
   `adf8ae2dbaec8db8b23ae6a51e131b0b8a8ae18e70e363720678c94e799ff4e1`.
 
-These are local source and bundle results, not deployed observations. No Worker
-version was uploaded and no traffic, route, schedule, binding, or KV state was
-changed by this integration work.
+Those were local source and bundle results, not deployed observations. At that
+pre-rollout boundary no Worker version had been uploaded and no traffic, route,
+schedule, binding, or KV state had been changed. The production rollout below
+supersedes that pre-rollout snapshot.
+
+## Rights and rest v49 production result
+
+PR #10 merged the draft rights ledger and bounded rest surface as Git commit
+`2d8180bce66a93c324d657ec4bfd2c8416885a9a` on 2026-07-13. The exact merge
+source was uploaded without traffic as:
+
+- Worker v49, `193e5090-cac3-4fcd-8380-e82c70815c19`;
+- tag `rights-rest-2d8180b`;
+- message `Draft rights ledger and bounded rest surface from merge 2d8180b`;
+- script ETag
+  `d69778de8bd5ce441516e11beb9c56724a63864565bde0f10d018e9e432ef7c3`;
+- fetch and scheduled handlers, compatibility date `2024-12-01`, and binding
+  names `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, and `ATTEST_SIGNING_KEY`.
+
+Deployment `be368654-4142-4f15-8f5d-88f110f22d28` attached v49 at 0% while
+keeping v48 at 100%. GET/HEAD-only version-override checks covered the root,
+manifest, rest and rights resources, museum and Mac pages, legacy reads, public
+list APIs, the retired check, and a missing-route response. No mutation method
+was exercised. An exact allocation and version-metadata guard then passed.
+
+Deployment `f1771d4c-0250-48aa-8615-a862a6703645` promoted v49 directly to
+100% at `2026-07-13T10:59:11.312148Z`, with no mixed-traffic canary and no
+non-versioned setting sync. After promotion, Cloudflare reported v49 as the
+only allocated version. An authenticated Worker download returned a
+493,767-byte `worker.js` entrypoint with SHA-256
+`adf8ae2dbaec8db8b23ae6a51e131b0b8a8ae18e70e363720678c94e799ff4e1`;
+it was byte-for-byte identical to the locked local dry-run bundle. The live
+route remained exactly `sinovai.com/*`, the cron remained exactly
+`0 * * * *`, and `wrangler triggers deploy` was not run.
+
+Post-promotion verification made only GET and HEAD requests. It checked both
+root representations, the canonical manifest, both rest representations, the
+rights document, zero-body HEAD responses, all museum and legacy pages, the
+five existing list APIs, the retired zero-outbound check, and a typed 404. The
+rights record remained `draft`, speaker authority remained `unverified`, no
+`effective_at` appeared, all 10 rights and five protective limits were present,
+all 43 duty results were enumerated, and none claimed `pass`. These observations
+cover the named public responses and deployment metadata; they do not prove
+whole-service Covenant conformance or infrastructure behavior.
+
+## Current rollback target after the rights and rest release
+
+The immediate code rollback target is the byte-verified pre-release v48,
+`91066b3a-4ae9-4dbb-b9c4-3b75cca1c86e`:
+
+```sh
+npx wrangler versions deploy \
+  '91066b3a-4ae9-4dbb-b9c4-3b75cca1c86e@100%' \
+  --message 'Rollback rights/rest v49 to byte-verified v48' \
+  -y
+```
+
+Before using that command, re-read the active deployment and both version
+identities. Stop and reconcile if another operator has changed production.
+V48's proven ETag and entrypoint digest are recorded in the **Current v48
+production source boundary** section above.
+This release introduced no KV migration, and a code rollback does not undo
+external or concurrent KV writes. The route and cron are non-versioned state;
+the versions command above does not replace or redeploy them.
