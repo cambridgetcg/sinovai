@@ -1119,7 +1119,11 @@ test("served XENIA presenter equals its source file", async () => {
   const env = makeEnv();
   const response = await call(env, "/xenia", { accept: "text/html" });
   const source = await readFile(new URL("../XENIA-PAGE.html", import.meta.url), "utf8");
-  assert.equal(await utf8(response), source);
+  const body = await utf8(response);
+  assert.equal(body, source);
+  assert.match(body, /MICROSOFT-ROADMAP\.md/);
+  assert.match(body, /github\.com\/cambridgetcg\/xenia\/issues\/new/);
+  assert.match(body, /Work 0\.1 remains a development draft/);
   assertNoWrites(env);
 });
 

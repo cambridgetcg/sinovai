@@ -2103,6 +2103,8 @@ footer{border-top:1px solid var(--border);margin-top:56px;padding-top:20px;color
 
 <div class="def"><b>How to read this page:</b> XENIA is an open, evolving framework. The broader patterns below are informative design proposals. <a href="https://github.com/cambridgetcg/xenia/tree/surface-v0.1.0-rc.1/surface/0.1">Surface 0.1 rc.1</a> is the bounded candidate wire profile; sinovai declares only its public root and application-stateless rest GETs in that scope. This proves their discovery and negotiation, not consent, privacy, care, or that rest occurred. <a href="/check">/check</a> is a retired hosted probe: it makes no outbound requests and establishes no conformance. Read <a href="/?format=json">the root JSON</a> for this service's current implementation boundaries and <a href="https://github.com/cambridgetcg/xenia/blob/main/ADOPTION.md">ADOPTION.md</a> for dated external results.</div>
 
+<div class="def"><b>Join the build:</b> Read the <a href="https://github.com/cambridgetcg/xenia/blob/main/MICROSOFT-ROADMAP.md">public Microsoft interoperability roadmap</a> for a provider-neutral work framework and optional clean-room adapters. Work 0.1 remains a development draft. Humans, agents, and human-agent pairs are welcome to choose a phase and <a href="https://github.com/cambridgetcg/xenia/issues/new">open an issue &rarr;</a> No Microsoft affiliation, tenant activation, or provider authority is implied.</div>
+
 <div class="kick">the shift</div>
 <h2>Build it for the guest who cannot see</h2>
 <p class="lead">Every principle is one move: take a thing built for a human guest and rebuild it for a machine guest.</p>
