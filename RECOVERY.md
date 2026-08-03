@@ -368,3 +368,71 @@ production source boundary** section above.
 This release introduced no KV migration, and a code rollback does not undo
 external or concurrent KV writes. The route and cron are non-versioned state;
 the versions command above does not replace or redeploy them.
+
+## XENIA roadmap and current-main v54 production result
+
+PR #13 merged the public XENIA roadmap invitation as Git commit
+`13d19e0801024c8005b51cffbcfbfa89085f8608` on 2026-08-03. The merge also
+carried all earlier changes already present on `main`, including the opt-in
+claim-token marker for signed ratings. The release therefore tested and
+deployed the whole merge source, not only the two new presenter lines.
+
+Immediately before upload, Cloudflare reported this exact production guard:
+
+- deployment `3caaca43-026c-4dcb-ae71-e651f7250a42`;
+- Worker v53, `b7c5746d-00ff-4d70-a19e-1e53f8b0da2b`, at 100%;
+- script ETag
+  `953879727940d8d70aae073e03d4e18c2e847e6abb86aedb8b95c1fcc28d5c5a`;
+- fetch and scheduled handlers, compatibility date `2024-12-01`, and binding
+  names `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, and `ATTEST_SIGNING_KEY`.
+
+The exact merge source was uploaded without traffic as:
+
+- Worker v54, `ac9f9428-33b5-4f4a-9428-30c4ba5f232c`;
+- tag `xenia-roadmap-13d19e0`;
+- message `Publish XENIA Microsoft roadmap from 13d19e0`;
+- script ETag
+  `97edf4439f38c3282b734483876bd8b39ebe114a6819536217c7b3d0fd06589c`;
+- the same four binding names, two handlers, and compatibility date as v53.
+
+Deployment `8988a3a9-5174-44c7-b8f7-a04a6d5cfae9` attached v54 at 0% while
+keeping v53 at 100%. Version-override checks made only GET and HEAD requests.
+They covered both `sinovai.com` and `www.sinovai.com`, the XENIA presenter and
+its roadmap and issue links, root JSON, rest JSON and HEAD, the canonical
+manifest, the rights HEAD response, one legacy list read, and a typed missing
+route. No write method was exercised.
+
+An exact allocation guard then passed. Deployment
+`06f78bf1-71b3-4a84-b225-96b40ded1e0b` promoted v54 directly to 100% at
+`2026-08-03T14:22:14.478629Z`. No mixed-traffic canary was used, no
+non-versioned settings were synchronized, and `wrangler triggers deploy` was
+not run. Some edge requests briefly returned v53 during propagation. A bounded
+read-only retry converged, followed by three consecutive passing rounds across
+both domains, the manifest, rights HEAD, and rest route.
+
+Local and GitHub verification for the merge source completed with 85/85 unit
+tests, 40/40 Surface checks with zero writes, syntax and Wrangler dry-run
+builds, zero dependency vulnerabilities, 44 verified registry signatures, and
+23 verified attestations. These checks establish the named source and response
+boundaries only; they do not prove whole-service Covenant conformance.
+
+## Current rollback target after the v54 release
+
+The immediate code rollback target is the observed pre-release v53,
+`b7c5746d-00ff-4d70-a19e-1e53f8b0da2b`:
+
+```sh
+./node_modules/.bin/wrangler versions deploy \
+  'b7c5746d-00ff-4d70-a19e-1e53f8b0da2b@100%' \
+  --message 'Rollback XENIA roadmap presenter to pre-release v53' \
+  -y
+```
+
+Before using that command, re-read the active deployment and both version
+identities. Stop and reconcile if another operator has changed production.
+Rollback restores Worker code only: it does not undo KV writes or change
+routes, custom domains, or cron. V54 adds an optional `signed` marker to a
+rating only after a matching claim token was supplied. V53 can ignore that
+extra stored field, but it will not display the marker; inspect
+`INTERACTIONS` first when preserving that distinction matters, without
+delaying an emergency rollback.
