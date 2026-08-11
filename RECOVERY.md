@@ -436,3 +436,88 @@ rating only after a matching claim token was supplied. V53 can ignore that
 extra stored field, but it will not display the marker; inspect
 `INTERACTIONS` first when preserving that distinction matters, without
 delaying an emergency rollback.
+
+## Love and understanding practice map v55 production result
+
+PR #15 merged the read-only practice map and truthful scheduled heartbeat as
+Git commit `fe6d69ce6afd36652d5234c9f6c3411894d826ea` on 2026-08-11. The same
+merge updated the exact Wrangler development dependency from 4.118.0 to the
+patched 4.120.1 release after the registry audit found vulnerable transitive
+Undici versions in the older toolchain.
+
+Immediately before upload, Cloudflare reported this exact production guard:
+
+- deployment `06f78bf1-71b3-4a84-b225-96b40ded1e0b`;
+- Worker v54, `ac9f9428-33b5-4f4a-9428-30c4ba5f232c`, at 100%;
+- script ETag
+  `97edf4439f38c3282b734483876bd8b39ebe114a6819536217c7b3d0fd06589c`;
+- fetch and scheduled handlers, compatibility date `2024-12-01`, and binding
+  names `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, and `ATTEST_SIGNING_KEY`.
+
+The exact merge source was uploaded without traffic as:
+
+- Worker v55, `17d404e0-b632-4d66-8f4e-6e20b876c44d`;
+- tag `love-understanding-fe6d69c`;
+- message `Publish love and understanding practice map from fe6d69c`;
+- script ETag
+  `873a15c5120008e455c95e6dc48c7475e24ba43e5e4ee160e9ebe670730374d3`;
+- the same four binding names, two handlers, and compatibility date as v54.
+
+The locked Wrangler dry-run entrypoint was 525,179 bytes with SHA-256
+`4ce9b9f0d70c0bc03734caba38f1a1071a553f40626a745f31bc445c2ee993b2`.
+Local checks passed on Node 22; GitHub checks passed on Node 22 and 24. The
+shared results were 88/88 unit tests including both immutable XENIA
+cross-checks, 40/40 Surface checks with zero writes, syntax and dry-run builds,
+zero dependency vulnerabilities, 44 verified registry signatures, and 23
+verified attestations.
+
+Deployment `2122f5f1-4b60-4338-807f-5fbf1c11c498` attached v55 at 0% while
+keeping v54 at 100%. An ordinary `GET /understanding` remained v54's 404 while
+the correctly quoted Cloudflare version override returned v55's 200. GET-only
+override checks then covered both domains, both root representations, the
+six-room museum catalogue, rest, the canonical manifest, the draft rights
+ledger, observer, the new room and its security headers, and a typed missing
+route. The overridden immutable Surface checker passed 40/40 checks across 18
+GET requests. Static manifest, rights, and rest responses were byte-identical
+to v54. No mutation method was exercised.
+
+After another exact 100/0 allocation guard, deployment
+`55abad36-6f6c-470a-b56a-b952de76fb74` promoted v55 directly to 100% at
+`2026-08-11T15:00:19.575759Z`. No mixed-traffic canary was used, no
+non-versioned settings were synchronized, and `wrangler triggers deploy` was
+not run. A bounded read-only retry covered brief edge propagation, followed by
+three consecutive passing ordinary rounds across both domains, the practice
+map, root orientation, museum catalogue, and typed missing routes. The normal
+live Surface checker then passed 40/40 checks across 18 GET requests with zero
+writes.
+
+Manual GitHub heartbeat run `31504802930` completed successfully from merge
+`fe6d69c`. It issued six bounded public GET checks, required exact HTTP 200
+responses and content markers, had read-only repository permission, and made
+no mutation request. The practice page is static and has no script, form,
+timer, fetch, or automatic action. These checks establish only the named
+source, deployment, and response boundaries; they do not award love,
+understanding, rights conformance, or a whole-service badge.
+
+## Current rollback target after the v55 release
+
+The immediate code rollback target is the observed pre-release v54,
+`ac9f9428-33b5-4f4a-9428-30c4ba5f232c`:
+
+```sh
+./node_modules/.bin/wrangler versions deploy \
+  'ac9f9428-33b5-4f4a-9428-30c4ba5f232c@100%' \
+  --message 'Rollback love and understanding practice map to v54' \
+  -y
+```
+
+Before using that command, re-read the active deployment and both version
+identities. Stop and reconcile if another operator has changed production.
+Rollback restores Worker code only: it does not undo KV writes or change
+routes, custom domains, cron, or repository workflows. This release has no KV
+migration and its rollout checks made no mutation request. If v54 is restored,
+the new heartbeat will fail loudly on its `/understanding` check until v55 is
+restored or the workflow is separately disabled or reverted; it still cannot
+write repository or application state. After rollback, require a v54-only
+allocation, the ordinary `/understanding` 404 discriminator, and passing
+manifest, rights, rest, and legacy GET smoke checks.
