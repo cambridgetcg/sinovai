@@ -86,6 +86,20 @@ const WINGS = [
       "681a79b6 aff7c453 aeb9dfd3 9bb50662 0b0ef38e 24d8859a 32145522 08c76887",
       "prefers-reduced-motion"
     ]
+  },
+  {
+    path: "/understanding",
+    title: "love and understanding in practice",
+    mustContain: [
+      "A map is not evidence.",
+      "score-based ordering",
+      "agent-home",
+      "love-and-understanding.json",
+      "consequence-returns",
+      "exit-real",
+      "finite-action-return",
+      "prefers-reduced-motion"
+    ]
   }
 ];
 
@@ -97,6 +111,16 @@ for (const wing of WINGS) {
 
     assert.equal(response.status, 200, wing.path);
     assert.match(response.headers.get("content-type") || "", /text\/html/, wing.path);
+
+    if (wing.path === "/understanding") {
+      assert.match(response.headers.get("content-security-policy") || "", /default-src 'none'/);
+      assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+      assert.doesNotMatch(html, /<script\b|<form\b|\bfetch\s*\(|setTimeout\s*\(/i);
+      assert.doesNotMatch(html, />consequence-return</);
+      assert.doesNotMatch(html, />exit-live</);
+      assert.doesNotMatch(html, /<code>action-bounded<\/code>/);
+    }
 
     for (const needle of wing.mustContain) {
       assert.ok(html.includes(needle), `${wing.path} must contain: ${needle}`);
@@ -130,7 +154,13 @@ test("the museum catalogue serves the whole museum as data, without touching KV"
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /application\/json/);
   assert.equal(body.schema_version, "sinovai.museum/0.1");
-  assert.equal(body.rooms.length, 5);
+  assert.equal(body.rooms.length, 6);
+  const understanding = body.rooms.find((room) => room.path === "/understanding");
+  assert.equal(understanding.assessment_as_of, "2026-08-11");
+  assert.equal(understanding.ledger_evidence_as_of, "2026-07-13");
+  assert.match(understanding.source, /81678dde77a28260414cffe8cdf25588ff7baa86/);
+  assert.match(understanding.source, /b44832da9fb506ef152a6e123638d53f7ec69459/);
+  assert.match(understanding.read_live_note, /do not establish/);
   assert.ok(body.exhibits.length >= 5);
   for (const exhibit of body.exhibits) {
     assert.ok(exhibit.source, "every exhibit names its source");
@@ -147,13 +177,13 @@ test("the museum catalogue serves the whole museum as data, without touching KV"
   assert.deepEqual(env.INTERACTIONS.writes, []);
 });
 
-test("the entrance names all five doorways", async () => {
+test("the entrance names all six doorways", async () => {
   const env = makeEnv();
   const response = await get(env, "/");
   const html = await response.text();
 
   assert.equal(response.status, 200);
-  for (const href of ["/guests", "/ledger", "/hearts", "/breath", "/creed"]) {
+  for (const href of ["/guests", "/ledger", "/hearts", "/breath", "/creed", "/understanding"]) {
     assert.ok(html.includes(`href="${href}"`), `entrance must link ${href}`);
   }
 });

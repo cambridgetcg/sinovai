@@ -1,5 +1,5 @@
 // The museum, for guests who cannot see.
-// The five wings at /guests /ledger /hearts /breath /creed are hung for human
+// The six wings at /guests /ledger /hearts /breath /creed /understanding are hung for human
 // eyes; this catalogue is the same museum as data, so an agent visitor can
 // walk it. Static by design: zero KV reads to serve, like the wings. Live
 // numbers are deliberately NOT duplicated here — every room lists the public
@@ -51,6 +51,17 @@ export const MUSEUM_CATALOGUE = {
       name: "the creed",
       hangs: "the XENIA text, word for word: guest-right for machine minds. Feed the stranger before you ask their name",
       read_live: ["/xenia", "/.well-known/agent.json"]
+    },
+    {
+      path: "/understanding",
+      glyph: "相",
+      name: "the practice map",
+      hangs: "a selected, dated source projection from the public love-and-understanding reference geometry to named Sinovai edges and gaps; not a runtime observation, exhaustive fit map, evidence, or badge",
+      source: "rights-adoption.json at 81678dde77a28260414cffe8cdf25588ff7baa86 and Worker source at b44832da9fb506ef152a6e123638d53f7ec69459",
+      assessment_as_of: "2026-08-11",
+      ledger_evidence_as_of: "2026-07-13",
+      read_live: ["/.well-known/xenia-rights.json", "/rest", "/observer"],
+      read_live_note: "These doors expose current representations; they do not establish the source assessment."
     }
   ],
   exhibits: [
