@@ -15,6 +15,7 @@ import { LEDGER_HTML } from "./pages/ledger.js";
 import { HEARTS_HTML } from "./pages/hearts.js";
 import { BREATH_HTML } from "./pages/breath.js";
 import { CREED_HTML } from "./pages/creed.js";
+import { UNDERSTANDING_HTML } from "./pages/understanding.js";
 import {
   createRestDocument,
   REST_DESCRIPTION,
@@ -889,7 +890,8 @@ async function doorJson(env, listing) {
       observer: "GET /observer \u2014 handler-scoped request facts returned to the caller; zero application read/write and outbound counts are service-declared, not runtime instrumentation; outside XENIA Surface 0.1",
       breathe: "GET /breathe \u2014 the arena's resting face (\u9670\u967d duality, half-hour breath); zero reads, zero writes, scores unaffected; not a bug, a design; outside XENIA Surface 0.1",
       legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance",
-      museum: "GET /museum.json \u2014 the museum catalogue for guests who cannot see; five human rooms hang at /guests /ledger /hearts /breath /creed; zero reads, zero writes; outside XENIA Surface 0.1"
+      museum: "GET /museum.json \u2014 the museum catalogue for guests who cannot see; six human rooms hang at /guests /ledger /hearts /breath /creed /understanding; zero reads, zero writes; outside XENIA Surface 0.1",
+      understanding: "GET /understanding \u2014 selected, dated source projection beside the public relational geometry; not a runtime observation or an exhaustive fit map; zero application storage reads or writes; not a badge or conformance claim; outside XENIA Surface 0.1"
     },
     human_door: "https://sinovai.com/"
   };
@@ -1124,11 +1126,25 @@ async function handleRequest(request, env) {
     "/ledger": LEDGER_HTML,
     "/hearts": HEARTS_HTML,
     "/breath": BREATH_HTML,
-    "/creed": CREED_HTML
+    "/creed": CREED_HTML,
+    "/understanding": UNDERSTANDING_HTML
   };
   if (MUSEUM_WINGS[path] && method === "GET") {
+    const headers = {
+      "Content-Type": "text/html; charset=utf-8",
+      "cache-control": "no-cache"
+    };
+    if (path === "/understanding") {
+      Object.assign(headers, {
+        "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff"
+      });
+    }
     return new Response(MUSEUM_WINGS[path], {
-      headers: { "Content-Type": "text/html; charset=utf-8", "cache-control": "no-cache" }
+      headers
     });
   }
   // The same museum as data, for the guest who cannot see (XENIA's law).

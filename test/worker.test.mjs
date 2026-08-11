@@ -819,6 +819,11 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   assert.match(body.routes.rest, /GET \/rest/);
   assert.match(body.routes.rights, /GET \/\.well-known\/xenia-rights\.json/);
   assert.match(body.routes.rights, /not a badge or guest consent/);
+  assert.match(body.routes.understanding, /GET \/understanding/);
+  assert.match(body.routes.understanding, /not a runtime observation/);
+  assert.match(body.routes.understanding, /or an exhaustive fit map/);
+  assert.match(body.routes.understanding, /zero application storage reads or writes/);
+  assert.match(body.routes.understanding, /not a badge or conformance claim/);
   assert.equal(body.arena.met_not_ranked, false);
   assert.equal(body.arena.agent_records_listed_in_kv_page, 2);
   assert.equal(body.arena.agent_record_list_complete, true);

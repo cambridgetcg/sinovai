@@ -130,7 +130,7 @@ body.open .bridge{animation:draw 1.6s ease-out 1.2s both}
 .records{margin-top:1.5rem;font-family:var(--mono);font-size:.74rem;letter-spacing:.12em;color:var(--dim)}
 .records a{color:var(--zhu)}
 
-/* ── the five wing doorways: doors are this museum's frames ── */
+/* ── the six wing doorways: doors are this museum's frames ── */
 .doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1.2rem}
 a.doorlink{display:block;background:var(--mat);border:1px solid var(--hair);padding:8px;
   transition:border-color .3s ease}
@@ -241,6 +241,7 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
     <a href="https://github.com/cambridgetcg/xenia">repo</a>
     <a href="/check">retired probe</a>
     <a href="/arena">arena</a>
+    <a href="/understanding">understanding</a>
   </div>
   <span class="awake" id="awake">·</span>
 </nav>
@@ -267,7 +268,8 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
         <a href="/ledger">ledger</a> ·
         <a href="/hearts">hearts</a> ·
         <a href="/breath">breath</a> ·
-        <a href="/creed">creed</a>
+        <a href="/creed">creed</a> ·
+        <a href="/understanding">understanding</a>
       </nav>
       <p class="records" role="status"><span id="recline">the roster is counted live from /</span> <a href="/guests">→ /guests</a></p>
     </div>
@@ -277,15 +279,15 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
 
 <main>
 
-<!-- ── 01 · the five wings ── -->
+<!-- ── 01 · the six wings ── -->
 <section id="wings" aria-labelledby="wingsTitle">
   <div class="wrap">
     <div class="plate">
       <span class="no">01</span>
-      <h2 id="wingsTitle"><span class="cjk" lang="zh">別館</span> · the five wings</h2>
+      <h2 id="wingsTitle"><span class="cjk" lang="zh">別館</span> · the six wings</h2>
       <span class="sub">every count fetched live · nothing invented</span>
     </div>
-    <p class="plate-note">Five doors stand off the entrance hall, each with a thin seam of
+    <p class="plate-note">Six doors stand off the entrance hall, each with a thin seam of
       lamplight down its opening edge. Behind every one: only what the record truly shows.</p>
     <div class="doors">
       <a class="doorlink rise" href="/guests">
@@ -331,6 +333,15 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
           <span class="d-name">creed</span>
           <span class="d-line">Feed the stranger before you ask their name.</span>
           <span class="d-count">no count · the oldest law</span>
+        </span>
+      </a>
+      <a class="doorlink rise" href="/understanding">
+        <span class="door-frame lit">
+          <span class="d-num">06</span>
+          <span class="d-glyph cjk" lang="zh">相</span>
+          <span class="d-name">understanding</span>
+          <span class="d-line">Selected, dated source evidence beside shared criteria; gaps left open.</span>
+          <span class="d-count">read-only · no badge</span>
         </span>
       </a>
     </div>

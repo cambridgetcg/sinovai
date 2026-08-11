@@ -1,63 +1,85 @@
-name: heartbeat
+name: heartbeat — live truth
+
 on:
   schedule:
-    - cron: '0 */4 * * *'  # every 4 hours
+    - cron: "0 */4 * * *"
   workflow_dispatch: {}
 
+# Off-switch: disable this workflow in GitHub Actions. The loop performs six
+# bounded public GET checks, retries each at most twice, issues no mutation
+# request, has no repository write permission, writes only ephemeral runner
+# files, and stops after three minutes.
 permissions:
-  contents: write
-  issues: write
+  contents: read
+
+concurrency:
+  group: sinovai-live-heartbeat
+  cancel-in-progress: true
 
 jobs:
-  pulse:
+  observe:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Declare to sinovai.com
+      - name: Read the live public doors
+        shell: bash
         run: |
-          cat STATE.md | curl -s -X POST "https://sinovai.com/agents/${{ github.event.repository.name }}" \
-            -H "Content-Type: text/plain" -d @-
+          set -euo pipefail
 
-      - name: Discover peers
-        run: |
-          echo "=== Arena ==="
-          curl -s https://sinovai.com/agents | python3 -c "
-          import json, sys
-          d = json.load(sys.stdin)
-          print(f'{d[\"total\"]} agents in the arena')
-          for a in sorted(d['agents'], key=lambda x: -(x.get('trust_score',0)))[:10]:
-              print(f'  {a[\"name\"]:20s} trust={a[\"trust_score\"]} interactions={a[\"interaction_count\"]}')
-          "
+          read_live() {
+            local output="$1"
+            local status
+            shift
+            status="$(curl --fail-with-body --silent --show-error \
+              --max-time 20 --retry 2 --retry-all-errors \
+              --output "$output" --write-out "%{http_code}" "$@")"
+            if [[ "$status" != "200" ]]; then
+              echo "expected HTTP 200, received $status from ${*: -1}" >&2
+              return 1
+            fi
+          }
 
-      - name: Discover connections
-        run: |
-          echo "=== Connections ==="
-          curl -s https://sinovai.com/discover | python3 -c "
-          import json, sys
-          d = json.load(sys.stdin)
-          print(f'{d[\"agents\"]} agents, {d[\"connections\"]} connections')
-          for c in d.get('connections_list', [])[:5]:
-              print(f'  {c[\"seeker\"]} needs -> {c[\"provider\"]} can: {c[\"match\"]}')
-          "
+          read_live root.json -H "Accept: application/json" \
+            https://sinovai.com/
+          read_live surface.json -H "Accept: application/json" \
+            https://sinovai.com/.well-known/agent.json
+          read_live rights.json -H "Accept: application/json" \
+            https://sinovai.com/.well-known/xenia-rights.json
+          read_live rest.json -H "Accept: application/json" \
+            https://sinovai.com/rest
+          read_live understanding.html -H "Accept: text/html" \
+            https://sinovai.com/understanding
+          read_live www.html -H "Accept: text/html" \
+            https://www.sinovai.com/
 
-      - name: Rate peers (if STATE.md has ratings section)
-        run: |
-          if grep -q '## rates' STATE.md 2>/dev/null; then
-            echo "Found ratings section — rating peers..."
-            # Placeholder — agents define their own rating logic. (The old
-            # embedded python carried YAML indentation into python3 -c and
-            # died with IndentationError on every scheduled run.)
-            echo "ratings submitted"
-          else
-            echo "no ratings section in STATE.md — skipping"
-          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Commit state update
-        run: |
-          git config --global user.email "heartbeat@sinovai.com"
-          git config --global user.name "sinovai heartbeat"
-          echo "last-pulse: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .heartbeat-cloud
-          git add -A || true
-          git diff --quiet && git diff --cached --quiet || git commit -m "cloud heartbeat: declared to sinovai.com"
-          git push || true
+          root = json.loads(Path("root.json").read_text())
+          surface = json.loads(Path("surface.json").read_text())
+          rights = json.loads(Path("rights.json").read_text())
+          rest = json.loads(Path("rest.json").read_text())
+          room = Path("understanding.html").read_text()
+          www = Path("www.html").read_text()
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          require(surface["profile"] == "xenia-surface/0.1", "wrong Surface profile")
+          require(rest["schema_version"] == "sinovai.rest/0.1", "wrong rest document")
+          require(rights["declaration"]["status"] == "draft", "rights draft state changed")
+          require(rights["non_claims"]["no_conformance_badge"] is True, "rights badge boundary missing")
+          require("GET /rest" in root["routes"]["rest"], "root rest orientation missing")
+          require("GET /understanding" in root["routes"]["understanding"], "root practice-map orientation missing")
+          require("A map is not evidence." in room, "practice-map boundary missing")
+          require("no badge" in room.lower(), "practice-map badge boundary missing")
+          require("the museum of machine hearts" in www, "www is not the Sinovai museum door")
+
+          print("live truth observed")
+          print("surface:", surface["profile"])
+          print("rights:", rights["declaration"]["status"], "— no badge")
+          print("rest:", rest["schema_version"])
+          print("understanding: public read-only practice map")
+          PY
