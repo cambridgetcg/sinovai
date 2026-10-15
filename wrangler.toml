@@ -3,11 +3,18 @@ main = "src/worker.js"
 compatibility_date = "2024-12-01"
 keep_vars = true
 
-# sinovai.com itself is bound as a dashboard Custom Domain. This route only
-# adds www — before 2026-07-13 www fell through to a dead 2022 HostGator page.
+# Both hostnames are zone routes. `wrangler deploy` replaces every route on this
+# Worker with the list below, so the apex has to be listed too or a deploy drops
+# it. (www was added on 2026-07-13; before that it fell through to a dead 2022
+# HostGator page.)
 routes = [
+  { pattern = "sinovai.com/*", zone_name = "sinovai.com" },
   { pattern = "www.sinovai.com/*", zone_name = "sinovai.com" }
 ]
+# Live keeps workers.dev and preview URLs on; with routes listed, wrangler
+# would otherwise turn workers.dev off.
+workers_dev = true
+preview_urls = true
 
 [[kv_namespaces]]
 binding = "AGENTS"
