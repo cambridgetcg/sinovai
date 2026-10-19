@@ -13,7 +13,8 @@
     "deploy": "npm run release:upload",
     "mac:bridge": "node macos/bridge.mjs",
     "test": "node --test test/*.test.mjs",
-    "test:surface": "node test/surface-conformance.mjs"
+    "test:surface": "node test/surface-conformance.mjs",
+    "verify": "node tools/verify.mjs"
   },
   "dependencies": {
     "@agenttool/xenia": "0.1.0-beta.4"
