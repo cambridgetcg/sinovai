@@ -72,7 +72,8 @@ function parseLikeTheHouse(text) {
 test("restores the line breaks of a glued discover.py card", () => {
   assert.equal(needsHearing(GLUED), true);
   const view = hearRecord(GLUED, parseLikeTheHouse);
-  assert.equal(view.schema_version, "sinovai.heard/0.1");
+  assert.equal(view.schema_version, "sinovai.heard/0.2");
+  assert.equal(view.kind, "reconstruction_proposal");
   assert.deepEqual(view.identity, { name: "ALETHEIA", kind: "project", language: "see repo", "runs-on": "this machine" });
   assert.equal(view.state["last-commit"], "c462236 Depth pass II: D drilled + substrate-fitness claim");
   assert.equal(view.state.freshness, "auto-generated (2026-06-19)");
@@ -84,9 +85,9 @@ test("restores the line breaks of a glued discover.py card", () => {
 
 test("reads literal \\n escapes exactly and leaves intact cards alone", () => {
   const escaped = "# x STATE\\n\\nname: x\\nkind: agent\\n\\n## knows\\n- one\\n- two";
-  const restored = restoreLineBreaks(escaped);
-  assert.match(restored.method, /literal/);
-  assert.deepEqual(hearRecord(escaped, parseLikeTheHouse).knows, ["one", "two"]);
+  const heard = hearRecord(escaped, parseLikeTheHouse);
+  assert.match(heard.method, /escaped line breaks/);
+  assert.deepEqual(heard.knows, ["one", "two"]);
   assert.equal(restoreLineBreaks(INTACT), null);
   assert.equal(needsHearing("short"), false);
   assert.equal(hearRecord("no structure at all here, just words", parseLikeTheHouse), null);
@@ -118,11 +119,12 @@ test("every guest's card has the same three parts", async () => {
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
     const html = await response.text();
-    for (const part of ["their words", "accounts of encounters", "what remains unknown", "correction"]) assert.ok(html.includes(part), `${name}: ${part}`);
+    for (const part of ["言", "accounts of encounters", "what remains unknown", "correction"]) assert.ok(html.includes(part), `${name}: ${part}`);
     assert.equal(/<script/i.test(html), false);
   }
   const reconstructed = await (await get("/guests/ALETHEIA")).text();
   assert.match(reconstructed, /a proposal, not the guest's words/);
+  assert.match(reconstructed, /a reading of their card/);
   assert.match(reconstructed, /No rating of this guest is recorded/);
   assert.match(reconstructed, /predates claim tokens/);
   const declared = await (await get("/guests/sol")).text();
@@ -195,4 +197,58 @@ test("an unreadable ledger is said once, consistently, and never as 'no rating'"
   assert.match(html, /ledger unavailable/);
   assert.equal(html.includes("no rating recorded"), false);
   assert.equal(html.includes("No rating of this guest"), false);
+});
+
+test("bullets keep known key names and dashes inside them; compound keys stay whole", () => {
+  const glued = "# t — STATEname: tdisplay-name: Tee Teekind: agent## knows- how name: values work- a - b spacing- third## can- one";
+  const v = hearRecord(glued, parseLikeTheHouse);
+  // "display-name" is not a known key, so it cannot be split off; what matters
+  // is that the "name" inside it no longer overwrites the real name.
+  assert.notEqual(v.identity.name, "Tee Tee");
+  assert.ok(v.identity.name.startsWith("t"));
+  assert.equal(v.identity.kind, "agent");
+  assert.deepEqual(v.knows, ["how name: values work", "a - b spacing", "third"]);
+  assert.deepEqual(v.can, ["one"]);
+});
+
+test("a repeated key keeps its first occurrence and says so", () => {
+  const v = hearRecord("name: firstkind: agentname: second## knows- x", parseLikeTheHouse);
+  assert.equal(v.identity.name, "first");
+  assert.ok(v.uncertain.some((u) => u.includes('"name"')));
+});
+
+test("escaped \\n that does not parse falls through to the generic reading", () => {
+  const card = "# t — STATEname: tkind: agenthealth: a\\nb## knows- one";
+  const v = hearRecord(card, parseLikeTheHouse);
+  assert.equal(v.identity.kind, "agent");
+  assert.deepEqual(v.knows, ["one"]);
+});
+
+test("one deliberate line with a single key is not treated as glued", () => {
+  assert.equal(needsHearing("name: a one-line card that is complete"), false);
+});
+
+test("names with sub-delimiters link to exactly their stored path", async () => {
+  const e = env();
+  e.AGENTS = makeKv({ "a@b+c": { name: "a@b+c", identity: { name: "a" }, state: {}, knows: [], can: [], needs: [], state_md: "name: a\n" } });
+  const html = await (await worker.fetch(new Request("https://sinovai.com/guests/a@b+c"), e, ctx)).text();
+  assert.match(html, /href="\/agents\/a@b\+c"/);
+});
+
+test("lowercase percent-escapes find the stored upper-case record", async () => {
+  const response = await get("/guests/%e8%b3%93");
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /href="\/agents\/%E8%B3%93"/);
+});
+
+test("the reconstruction says how this record can be corrected", async () => {
+  const body = await (await get("/agents/ALETHEIA", "application/json")).json();
+  assert.match(body.agent.reconstruction.correction, /operator migration/);
+});
+
+test("the received-text count is in characters, not UTF-16 units", async () => {
+  const e = env();
+  e.AGENTS = makeKv({ emoji: { name: "emoji", identity: { name: "e" }, state: {}, knows: [], can: [], needs: [], state_md: "name: e🫀\n" } });
+  const html = await (await worker.fetch(new Request("https://sinovai.com/guests/emoji"), e, ctx)).text();
+  assert.match(html, /\(9 characters\)/);
 });

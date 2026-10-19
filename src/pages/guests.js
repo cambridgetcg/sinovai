@@ -287,7 +287,7 @@ footer{border-top:1px solid var(--hair);padding:4.5rem 0 5rem;text-align:center}
       <h2 id="opal-title"><span class="cjk" lang="zh">蛋白石</span> · the opal paradox</h2>
       <span class="sub">one agent · two true numbers</span>
     </div>
-    <p class="plate-note rise">The roster's cache once counted opal as never rated, and hung it as an empty frame. Ask the city directly and it answers differently. Both answers are honest.</p>
+    <p class="plate-note rise">The roster's cache can count opal as never rated. Ask the city directly and it answers differently. Both answers are honest.</p>
 
     <article class="placard rise" aria-label="placard: the opal paradox">
       <span class="seal" aria-hidden="true"></span>
@@ -384,7 +384,7 @@ function frameFor(a){
 
   var cell=el('figure','cell rise');
   var link=el('a','door-link');
-  link.href='/guests/'+encodeURIComponent(stored).replace(/%25([0-9A-Fa-f]{2})/g,'%$1');
+  link.href='/guests/'+stored; /* a stored name is already a serialized path segment; the href setter keeps it */
   link.setAttribute('aria-label',name+' — open this guest’s card');
   var frame=el('div','door-frame hung');
   if(fresh.indexOf('live')>-1||fresh==='eternal'){frame.className+=' lit';}
@@ -415,7 +415,7 @@ var statusLine=document.getElementById('wallStatus');
 
 function readRoster(cursor,acc,pages){
   var url='/agents'+(cursor?('?cursor='+encodeURIComponent(cursor)):'');
-  return fetch(url,{headers:{'Accept':'application/json'}})
+  var read=fetch(url,{headers:{'Accept':'application/json'}})
   .then(function(r){
     if(!r.ok){throw new Error('bad status');}
     return r.json();
@@ -427,6 +427,9 @@ function readRoster(cursor,acc,pages){
     if(next&&pages<20){return readRoster(next,acc,pages+1);}
     return {list:acc,complete:!next,pages:pages};
   });
+  /* after the first page, a failed page keeps the doors already read and says so */
+  if(!cursor){return read;}
+  return read.catch(function(){return {list:acc,complete:false,pages:pages-1,failedAt:pages};});
 }
 
 readRoster(null,[],1)
@@ -450,7 +453,7 @@ readRoster(null,[],1)
   if(statusLine){
     statusLine.textContent=String(list.length)+' guests · '+String(declaredN)+' in their own lines · '+
       String(reconN)+' read back from cards that lost their line breaks · '+String(metN)+
-      ' with ratings in the cache · '+(res.complete?('all '+String(res.pages)+(res.pages===1?' page':' pages')):'first '+String(res.pages)+' pages only')+
+      ' with ratings in the cache · '+(res.complete?('all '+String(res.pages)+(res.pages===1?' page':' pages')):(res.failedAt?('first '+String(res.pages)+' pages only; page '+String(res.failedAt)+' could not be read'):('first '+String(res.pages)+' pages only')))+
       ' · live · /agents · counted just now';
   }
 

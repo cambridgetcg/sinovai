@@ -93,8 +93,12 @@ function reconstructionFor(agent) {
   if (typeof agent?.state_md !== "string" || !needsHearing(agent.state_md)) return null;
   const view = hearRecord(agent.state_md, parseStateMd);
   if (!view) return null;
+  const claimable = typeof agent.claim_token === "string" && agent.claim_token.length > 0;
   return {
     ...view,
+    correction: claimable
+      ? "Re-declaring this name with its claim token, line breaks intact, replaces this reading."
+      : "This record has no claim token; changing it needs an operator migration.",
     identity: boundedProfileFields(view.identity),
     state: boundedProfileFields(view.state),
     knows: boundedProfileItems(view.knows),
@@ -1177,13 +1181,22 @@ async function handleRequest(request, env) {
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff"
     };
-    const stored = storedNameError(name) ? null : await env.AGENTS.get(name, "json");
+    let key = name;
+    let stored = storedNameError(name) ? null : await env.AGENTS.get(name, "json");
+    // Percent-escapes are case-insensitive in meaning; stored keys use upper case.
+    if (!stored && /%[0-9a-f]{2}/.test(name)) {
+      const upper = name.replace(/%[0-9a-fA-F]{2}/g, (e) => e.toUpperCase());
+      if (upper !== name && !storedNameError(upper)) {
+        stored = await env.AGENTS.get(upper, "json");
+        if (stored) key = upper;
+      }
+    }
     if (!stored) return new Response(renderGuestMissing(name), { status: 404, headers });
-    const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
+    const { interactions, error } = await readInteractions(env.INTERACTIONS, `${key}:all`);
     const html = renderGuestCard({
-      name,
-      guest: publicAgent(stored, name),
-      interactions: error ? [] : interactions.filter((it) => it.rated === name),
+      name: key,
+      guest: publicAgent(stored, key),
+      interactions: error ? [] : interactions.filter((it) => it.rated === key),
       ledgerError: !!error,
       claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0,
       flattened: typeof stored.state_md === "string" && needsHearing(stored.state_md)

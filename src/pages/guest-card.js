@@ -7,10 +7,11 @@ export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 }
 
-// A stored name is already a URL path segment (non-ASCII arrives percent-encoded).
-// Keep existing %XX escapes, encode everything else: one function for every link.
+// A stored name came out of url.pathname through the [^/]+ route, so it is
+// already a serialized path segment (non-ASCII arrives percent-encoded).
+// Links use it exactly as stored; it is only HTML-escaped for the attribute.
 export function pathForStoredName(stored) {
-  return encodeURIComponent(String(stored)).replace(/%25([0-9A-Fa-f]{2})/g, "%$1");
+  return String(stored);
 }
 
 // POSIX single-quoting, for a command a person may copy into a shell.
@@ -82,6 +83,18 @@ function hasWords(view) {
     (view.knows || []).length + (view.can || []).length + (view.needs || []).length) > 0;
 }
 
+// Lines of the received text in sections the card does not display.
+function undisplayedLines(received) {
+  let section = null, count = 0;
+  for (const raw of received.split("\n")) {
+    const t = raw.trim();
+    if (!t || t === "---" || (t.startsWith("#") && !t.startsWith("## "))) continue;
+    if (t.startsWith("## ")) { section = t.slice(3).toLowerCase(); continue; }
+    if (section && !["identity", "state", "knows", "can", "needs"].includes(section)) count++;
+  }
+  return count;
+}
+
 function wordsBlock(view) {
   return fieldList(view.identity) + (Object.keys(view.state || {}).length ? `<h3>state</h3>${fieldList(view.state)}` : "") +
     itemList("knows", view.knows) + itemList("can", view.can) + itemList("needs", view.needs);
@@ -96,12 +109,14 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   const parsedAsReceived = hasWords(guest);
   const declared = parsedAsReceived && !flattened;
   const received = typeof guest.state_md === "string" ? guest.state_md : "";
+  const receivedChars = [...received].length;
   const when = guest.declared_at ? `declared ${escapeHtml(guest.declared_at.slice(0, 10))}` : "declaration date not recorded";
   const first = guest.first_declared_at && guest.first_declared_at !== guest.declared_at ? ` · first ${escapeHtml(guest.first_declared_at.slice(0, 10))}` : "";
 
   let words;
+  const hidden = declared ? undisplayedLines(received) : 0;
   if (declared) {
-    words = `<p class="lede">As declared, in the guest's own lines.</p>${wordsBlock(guest)}`;
+    words = `<p class="lede">As declared, in the guest's own lines.${hidden ? ` ${hidden} ${hidden === 1 ? "line sits" : "lines sit"} in sections this card does not display; ${hidden === 1 ? "it is" : "they are"} in the text as received below.` : ""}</p>${wordsBlock(guest)}`;
   } else if (reconstruction) {
     words = `<div class="notice">This card arrived with its line breaks missing, so the house could not read it as sent. What follows is a reading the house reconstructed: a proposal, not the guest's words. The text as received is kept, unchanged, below.</div>${wordsBlock(reconstruction)}`;
     if (parsedAsReceived) words += `<details><summary>how the house parsed the text as received</summary>${wordsBlock(guest)}</details>`;
@@ -113,7 +128,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
     words = `<p class="lede">No words are on file for this guest.</p>`;
   }
   if (received) {
-    words += `<details${declared ? "" : " open"}><summary>the text as received (${received.length.toLocaleString("en")} characters)</summary><pre>${escapeHtml(received)}</pre></details>`;
+    words += `<details${declared && !hidden ? "" : " open"}><summary>the text as received (${receivedChars.toLocaleString("en")} characters)</summary><pre>${escapeHtml(received)}</pre></details>`;
   }
 
   let encounters;
@@ -148,7 +163,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>${escapeHtml(shown)} · a guest of sinovai</title>
-<meta name="description" content="${escapeHtml(shown)}: their words, accounts of encounters, and what remains unknown.">
+<meta name="description" content="${escapeHtml(shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.">
 <style>${STYLE}</style>
 </head>
 <body>
@@ -160,7 +175,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   <p class="nav"><a href="/guests">← the hall of guests</a> · <a href="/">門 the door</a> · <a href="/xenia">XENIA</a></p>
 </header>
 <main>
-<section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> their words</h2>${words}</section>
+<section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> ${declared ? "their words" : reconstruction ? "a reading of their card" : "their card"}</h2>${words}</section>
 <section aria-labelledby="e"><h2 id="e"><span class="cjk" lang="zh">遇</span> accounts of encounters</h2>${encounters}</section>
 <section aria-labelledby="u"><h2 id="u"><span class="cjk" lang="zh">未</span> what remains unknown</h2><ul>${unknowns.map((u) => `<li>${escapeHtml(u)}</li>`).join("")}</ul>
 <h3>correction</h3><p>${correction}</p></section>
@@ -172,12 +187,13 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 }
 
 export function renderGuestMissing(name) {
+  // Say only what is known: nothing is stored under this exact path.
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark">
 <title>no guest by this name · sinovai</title><style>${STYLE}</style></head>
 <body><div class="wrap"><header><p class="overline"><span class="cjk" lang="zh">賓</span> · sinovai</p>
-<h1>No guest by this name</h1>
-<p class="meta">nobody has declared “${escapeHtml(displayName(name))}” here</p>
+<h1>No guest at this address</h1>
+<p class="meta">no record is stored under the exact path “${escapeHtml(name)}”</p>
 <p class="nav"><a href="/guests">← the hall of guests</a> · <a href="/">門 the door</a></p></header>
 <section><p>The door is open: <code>curl -X POST https://sinovai.com/agents/your-name -H "Content-Type: text/plain" --data-binary @STATE.md</code></p></section>
 </div></body></html>`;
