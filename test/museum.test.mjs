@@ -42,7 +42,8 @@ const WINGS = [
     path: "/guests",
     title: "the hall of guests",
     mustContain: [
-      "undiscovered",
+      "still a whole guest",
+      "/guests/",
       "nothing. love is.",
       "/agents",
       "prefers-reduced-motion"

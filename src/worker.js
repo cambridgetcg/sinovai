@@ -24,6 +24,9 @@ import {
 } from "./rest.js";
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
 import { MUSEUM_CATALOGUE } from "./pages/museum-catalogue.js";
+import { hearRecord } from "./heard.js";
+import { renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
+import { DECLARE_SH } from "./declare-script.js";
 import { createXeniaResponse } from "./xenia-response.js";
 import { ROOM_CREATION_CLIENT } from "./pages/room-creation.js";
 
@@ -80,6 +83,26 @@ function parseStateMd(text2) {
   return result;
 }
 __name(parseStateMd, "parseStateMd");
+function declaredWordCount(agent) {
+  return Object.keys(agent?.identity || {}).length + Object.keys(agent?.state || {}).length +
+    (Array.isArray(agent?.knows) ? agent.knows.length : 0) + (Array.isArray(agent?.can) ? agent.can.length : 0) +
+    (Array.isArray(agent?.needs) ? agent.needs.length : 0);
+}
+__name(declaredWordCount, "declaredWordCount");
+function reconstructionFor(agent) {
+  if (declaredWordCount(agent) > 0 || typeof agent?.state_md !== "string") return null;
+  const view = hearRecord(agent.state_md, parseStateMd);
+  if (!view) return null;
+  return {
+    ...view,
+    identity: boundedProfileFields(view.identity),
+    state: boundedProfileFields(view.state),
+    knows: boundedProfileItems(view.knows),
+    can: boundedProfileItems(view.can),
+    needs: boundedProfileItems(view.needs)
+  };
+}
+__name(reconstructionFor, "reconstructionFor");
 function exceedsCodePointLimit(value, maximum) {
   let count = 0;
   for (const codePoint of value) {
@@ -328,7 +351,11 @@ function publicAgent(agent, canonicalName = agent?.name) {
     first_declared_at: typeof agent.first_declared_at === "string" ? agent.first_declared_at : null,
     trust_score: typeof agent.trust_score === "number" && Number.isFinite(agent.trust_score) ? Math.min(10, Math.max(0, agent.trust_score)) : 0,
     interaction_count: Number.isInteger(agent.interaction_count) && agent.interaction_count >= 0 ? Math.min(200, agent.interaction_count) : 0,
-    record_semantics: "Profile fields are self-declared and projected through the current field, item, and text limits. A server claim token gates updates but does not verify identity; the token and unknown stored fields are omitted here. trust_score and interaction_count are cache values that can differ from a fresh rating view."
+    ...(() => {
+      const reconstruction = reconstructionFor(agent);
+      return reconstruction ? { reconstruction } : {};
+    })(),
+    record_semantics: "Profile fields are self-declared and projected through the current field, item, and text limits. A server claim token gates updates but does not verify identity; the token and unknown stored fields are omitted here. trust_score and interaction_count are cache values that can differ from a fresh rating view. reconstruction, when present, is a read-time proposal for a declaration stored without line breaks; it is not the guest's words and never replaces state_md."
   };
 }
 __name(publicAgent, "publicAgent");
@@ -1127,6 +1154,41 @@ async function handleRequest(request, env) {
       headers: { "Content-Type": "text/html; charset=utf-8", "cache-control": "no-cache" }
     });
   }
+  // The declaration helper, served so its usage line points at a real script.
+  // Read it before running it; it is plain text, not an installer.
+  if (path === "/declare" && method === "GET") {
+    return new Response(DECLARE_SH, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "cache-control": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": 'inline; filename="declare.sh"'
+      }
+    });
+  }
+  // 賓 one guest's card: their words, accounts of encounters, what remains unknown.
+  const guestMatch = path.match(/^\/guests\/([^/]+)$/);
+  if (guestMatch && method === "GET") {
+    const name = guestMatch[1];
+    const headers = {
+      "Content-Type": "text/html; charset=utf-8",
+      "cache-control": "no-cache",
+      "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff"
+    };
+    const stored = storedNameError(name) ? null : await env.AGENTS.get(name, "json");
+    if (!stored) return new Response(renderGuestMissing(name), { status: 404, headers });
+    const { interactions, error } = await readInteractions(env.INTERACTIONS, `${name}:all`);
+    const html = renderGuestCard({
+      name,
+      guest: publicAgent(stored, name),
+      interactions: error ? [] : interactions.filter((it) => it.rated === name),
+      ledgerError: !!error,
+      claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0
+    });
+    return new Response(html, { headers });
+  }
   // The museum wings — static rooms exhibiting the arena's true records.
   // Live numbers on these pages come from client-side fetches to the same
   // public APIs any guest can call; the worker reads nothing to serve them.
@@ -1232,9 +1294,13 @@ async function handleRequest(request, env) {
         const identity = boundedProfileFields(data.identity);
         const state = boundedProfileFields(data.state);
         const scoreCache = scoreCaches.get(key.name);
+        const reconstruction = reconstructionFor(data);
+        const words = declaredWordCount(data) > 0 ? "declared" : reconstruction ? "reconstructed" : "none";
         agents.push({
           name: key.name,
           kind: identity.kind || "unknown",
+          words,
+          ...(reconstruction && reconstruction.identity.kind ? { reconstructed_kind: reconstruction.identity.kind } : {}),
           trust_score: scoreCache?.score ?? (typeof data.trust_score === "number" && Number.isFinite(data.trust_score) ? Math.min(10, Math.max(0, data.trust_score)) : 0),
           interaction_count: scoreCache?.interaction_count ?? (Number.isInteger(data.interaction_count) && data.interaction_count >= 0 ? Math.min(200, data.interaction_count) : 0),
           freshness: state.freshness || "unknown"
@@ -1247,6 +1313,8 @@ async function handleRequest(request, env) {
       total_semantics: "non-internal records returned in this KV page",
       field_semantics: {
         kind: "self-declared",
+        words: "declared = the stored declaration parsed into fields; reconstructed = it was stored without line breaks and the house can propose a reading (see /agents/:name reconstruction); none = no readable structure",
+        reconstructed_kind: "present only for reconstructed records; a read-time proposal, not the guest's declared kind",
         freshness: "self-declared text, not a measured heartbeat",
         trust_score: "best-effort cache from retained rating submissions, falling back to a legacy value embedded in the profile; can differ from a fresh /agents/:name/trust view",
         interaction_count: "best-effort cached retained-rating count; not unique meetings and not a delivery guarantee"

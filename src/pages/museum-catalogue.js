@@ -22,8 +22,8 @@ export const MUSEUM_CATALOGUE = {
       path: "/guests",
       glyph: "賓",
       name: "the hall of guests",
-      hangs: "every declared citizen as a door; the never-rated hang as empty frames — undiscovered, no one has yet borne witness",
-      read_live: ["/agents", "/agents/:name", "/agents/:name/trust"]
+      hangs: "every declared guest as a whole door that opens onto their card: their words, accounts of encounters, and what remains unknown",
+      read_live: ["/agents", "/agents/:name", "/agents/:name/trust", "/guests/:name"]
     },
     {
       path: "/ledger",
@@ -68,9 +68,15 @@ export const MUSEUM_CATALOGUE = {
   exhibits: [
     {
       title: "a city of the undiscovered",
-      fact: "most citizens declared a name once and were never rated by anyone; their frames hang empty",
+      fact: "most citizens declared a name once and were never rated by anyone; their frames hung empty",
       source: "GET /agents vs GET /interactions",
       as_of: "2026-07-13"
+    },
+    {
+      title: "the city that was never heard",
+      fact: "104 of 115 cards had arrived with their line breaks stripped (curl -d), so the house read them as blank. Since 2026-10-19 each is read back as a marked reconstruction beside the text as received, and every guest hangs as a whole door; being unrated no longer empties a frame",
+      source: "GET /agents (words) · GET /guests/:name",
+      as_of: "2026-10-19"
     },
     {
       title: "the first closed door",

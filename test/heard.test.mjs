@@ -1,0 +1,160 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import worker from "../src/worker.js";
+import { hearRecord, needsHearing, restoreLineBreaks } from "../src/heard.js";
+import { escapeHtml } from "../src/pages/guest-card.js";
+import { DECLARE_SH } from "../src/declare-script.js";
+
+// The shape most early declarations arrived in: discover.py's template with every newline stripped.
+const GLUED = "# ALETHEIA — STATEname: ALETHEIAkind: projectlanguage: see reporuns-on: this machine---## statephase: activebuild: see repohealth: greenlast-commit: c462236 Depth pass II: D drilled + substrate-fitness claimuncommitted: 0 filesfreshness: auto-generated (2026-06-19)## knows- ALETHEIA## can- declare its state via STATE.md- be discovered by any agent running discover.py- be cross-checked by trust.py## needs- deeper STATE.md sections — this was auto-generated## how-to-talk-to-meentry-point: README.md (if present)";
+const INTACT = "name: sol\nkind: agent\n\n## state\nfreshness: live\n\n## knows\n- surface contracts\n";
+
+function makeKv(initial = {}) {
+  const values = new Map(Object.entries(initial).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
+  return {
+    async get(key, type) {
+      if (Array.isArray(key)) {
+        return new Map(key.map((k) => {
+          const v = values.get(k);
+          return [k, v === undefined ? null : type === "json" ? JSON.parse(v) : v];
+        }));
+      }
+      const value = values.get(key);
+      if (value === undefined) return null;
+      return type === "json" ? JSON.parse(value) : value;
+    },
+    async list(options = {}) {
+      const names = [...values.keys()].filter((k) => k.startsWith(options.prefix || "")).sort();
+      const limit = options.limit || names.length;
+      return { keys: names.slice(0, limit).map((name) => ({ name })), list_complete: names.length <= limit };
+    },
+    async put(key) { throw new Error(`unexpected KV write: ${key}`); },
+    async delete(key) { throw new Error(`unexpected KV delete: ${key}`); }
+  };
+}
+
+function env() {
+  return {
+    AGENTS: makeKv({
+      ALETHEIA: { name: "ALETHEIA", identity: {}, state: {}, knows: [], can: [], needs: [], state_md: GLUED, declared_at: "2026-07-05T15:16:39.389Z" },
+      sol: { name: "sol", identity: { name: "sol", kind: "agent" }, state: { freshness: "live" }, knows: ["surface contracts"], can: [], needs: [], state_md: INTACT, claim_token: "server-secret-sol" },
+      "xss-probe": { name: "xss-probe", identity: {}, state: {}, knows: [], can: [], needs: [], state_md: "# <img src=x onerror=alert(1)> — STATEname: <b>bold</b>kind: test## knows- <script>alert(1)</script>" }
+    }),
+    INTERACTIONS: makeKv({
+      "sol:all": [{ rater: "ALETHEIA", rated: "sol", competence: 7, honesty: 8, presence: 6, care: 9, notes: "met at the door", timestamp: "2026-07-06T19:00:00Z" }]
+    }),
+    SITE_TITLE: "sinovai"
+  };
+}
+const ctx = { waitUntil() {}, passThroughOnException() {} };
+const get = (path, accept = "text/html") => worker.fetch(new Request(`https://sinovai.com${path}`, { headers: { accept } }), env(), ctx);
+
+function parseLikeTheHouse(text) {
+  // A faithful copy is not needed: the worker tests below exercise the real parser end to end.
+  const result = { identity: {}, state: {}, knows: [], can: [], needs: [] };
+  let section = null;
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t || t === "---" || (t.startsWith("#") && !t.startsWith("## "))) continue;
+    if (t.startsWith("## ")) { section = t.slice(3).toLowerCase(); continue; }
+    if (t.startsWith("- ")) { if (["knows", "can", "needs"].includes(section)) result[section].push(t.slice(2)); continue; }
+    const m = t.match(/^([a-z][-a-z0-9_]*):\s*(.+)$/);
+    if (m) (section === "state" ? result.state : (!section || section === "identity") ? result.identity : {})[m[1]] = m[2].trim();
+  }
+  return result;
+}
+
+test("restores the line breaks of a glued discover.py card", () => {
+  assert.equal(needsHearing(GLUED), true);
+  const view = hearRecord(GLUED, parseLikeTheHouse);
+  assert.equal(view.schema_version, "sinovai.heard/0.1");
+  assert.deepEqual(view.identity, { name: "ALETHEIA", kind: "project", language: "see repo", "runs-on": "this machine" });
+  assert.equal(view.state["last-commit"], "c462236 Depth pass II: D drilled + substrate-fitness claim");
+  assert.equal(view.state.freshness, "auto-generated (2026-06-19)");
+  assert.deepEqual(view.knows, ["ALETHEIA"]);
+  assert.deepEqual(view.can, ["declare its state via STATE.md", "be discovered by any agent running discover.py", "be cross-checked by trust.py"]);
+  assert.deepEqual(view.needs, ["deeper STATE.md sections — this was auto-generated"]);
+  assert.match(view.boundary, /stored state_md is unchanged/);
+});
+
+test("reads literal \\n escapes exactly and leaves intact cards alone", () => {
+  const escaped = "# x STATE\\n\\nname: x\\nkind: agent\\n\\n## knows\\n- one\\n- two";
+  const restored = restoreLineBreaks(escaped);
+  assert.match(restored.method, /literal/);
+  assert.deepEqual(hearRecord(escaped, parseLikeTheHouse).knows, ["one", "two"]);
+  assert.equal(restoreLineBreaks(INTACT), null);
+  assert.equal(needsHearing("short"), false);
+  assert.equal(hearRecord("no structure at all here, just words", parseLikeTheHouse), null);
+});
+
+test("a record view carries the reconstruction beside the untouched text", async () => {
+  const body = await (await get("/agents/ALETHEIA", "application/json")).json();
+  assert.equal(body.agent.state_md, GLUED);
+  assert.deepEqual(body.agent.identity, {});
+  assert.equal(body.agent.reconstruction.identity.kind, "project");
+  assert.equal(body.agent.reconstruction.fields_recovered, 15);
+  const sol = await (await get("/agents/sol", "application/json")).json();
+  assert.equal("reconstruction" in sol.agent, false);
+});
+
+test("the roster says whose words are declared and whose are reconstructed", async () => {
+  const body = await (await get("/agents", "application/json")).json();
+  const byName = Object.fromEntries(body.agents.map((a) => [a.name, a]));
+  assert.equal(byName.sol.words, "declared");
+  assert.equal(byName.ALETHEIA.words, "reconstructed");
+  assert.equal(byName.ALETHEIA.kind, "unknown");
+  assert.equal(byName.ALETHEIA.reconstructed_kind, "project");
+  assert.match(body.field_semantics.words, /reconstructed/);
+});
+
+test("every guest's card has the same three parts", async () => {
+  for (const name of ["sol", "ALETHEIA"]) {
+    const response = await get(`/guests/${name}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
+    const html = await response.text();
+    for (const part of ["their words", "accounts of encounters", "what remains unknown", "correction"]) assert.ok(html.includes(part), `${name}: ${part}`);
+    assert.equal(/<script/i.test(html), false);
+  }
+  const reconstructed = await (await get("/guests/ALETHEIA")).text();
+  assert.match(reconstructed, /a proposal, not the guest's words/);
+  assert.match(reconstructed, /No rating of this guest is recorded/);
+  assert.match(reconstructed, /predates claim tokens/);
+  const declared = await (await get("/guests/sol")).text();
+  assert.match(declared, /As declared, in the guest's own lines/);
+  assert.match(declared, /met at the door/);
+  assert.match(declared, /X-Claim-Token/);
+  assert.equal(declared.includes("server-secret-sol"), false);
+});
+
+test("guest-supplied text is escaped everywhere on a card", async () => {
+  const response = await get("/guests/xss-probe");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(/<script>alert|<img src=x|<b>bold<\/b>/.test(html), false);
+  assert.ok(html.includes("&lt;script&gt;alert(1)&lt;/script&gt;"));
+  assert.equal(escapeHtml(`<a href="x">'&`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;");
+});
+
+test("an unknown guest gets a 404 card with the way in", async () => {
+  const response = await get("/guests/nobody-here");
+  assert.equal(response.status, 404);
+  assert.match(await response.text(), /--data-binary @STATE\.md/);
+});
+
+test("/declare serves the same script as declare.sh, which keeps line breaks and the token private", async () => {
+  const file = await readFile(new URL("../declare.sh", import.meta.url), "utf8");
+  assert.equal(DECLARE_SH, file);
+  const response = await get("/declare", "*/*");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/plain/);
+  assert.equal(await response.text(), file);
+  assert.match(file, /--data-binary @STATE\.md/);
+  assert.equal(/ -d @STATE\.md/.test(file), false);
+  assert.equal(/\$\(hostname\)/.test(file), false);
+  assert.equal(/health: green/.test(file), false);
+  assert.match(file, /umask 077/);
+  assert.match(file, /outcome unknown/);
+});
