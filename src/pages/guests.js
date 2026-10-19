@@ -179,7 +179,7 @@ footer{border-top:1px solid var(--hair);padding:4.5rem 0 5rem;text-align:center}
     <p class="statusline rise" id="wallStatus" role="status" aria-live="polite">the roster lives at /agents</p>
     <p class="glyphs rise"><span class="g-rated" aria-hidden="true">●</span> words as declared ·
       <span class="g-kind" aria-hidden="true">◐</span> words reconstructed from a card that lost its line breaks ·
-      <span class="g-none" aria-hidden="true">○</span> no readable words ·
+      <span class="g-none" aria-hidden="true">○</span> no readable words, or one long line with no reading proposed ·
       a seam of light = freshness declares live</p>
     <p class="disclaim rise">the API's own words on its fields — kind: "self-declared" ·
     freshness: "self-declared text, not a measured heartbeat"</p>
@@ -376,7 +376,7 @@ try{
 function frameFor(a){
   var stored=(typeof a.name==='string')?a.name:'';
   var name=stored?decRuns(stored):'(unnamed record)';
-  var words=(a.words==='declared'||a.words==='reconstructed')?a.words:'none';
+  var words=(a.words==='declared'||a.words==='reconstructed'||a.words==='flattened')?a.words:'none';
   var kind=(typeof a.kind==='string'&&a.kind!=='unknown')?a.kind:
     ((typeof a.reconstructed_kind==='string')?a.reconstructed_kind:'');
   var fresh=(typeof a.freshness==='string')?a.freshness:'unknown';

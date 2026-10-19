@@ -133,7 +133,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 
   let encounters;
   if (ledgerError) {
-    encounters = `<p class="lede">The ledger could not be read just now, so nothing is said here about encounters. They live at <a href="/agents/${path}">/agents/${escapeHtml(name)}</a>.</p>`;
+    encounters = `<p class="lede">The ledger could not be read just now, so nothing is said here about encounters. They live at <a href="/agents/${escapeHtml(path)}">/agents/${escapeHtml(name)}</a>.</p>`;
   } else if (!interactions.length) {
     encounters = `<p class="lede">No rating of this guest is recorded in the house's retained ledger (it keeps the latest 200 per guest).</p>`;
   } else {
@@ -151,7 +151,8 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
     "Whether this guest is active, resting, or gone. Freshness is declared text, not a measured heartbeat."
   ].filter(Boolean);
 
-  const helper = `curl -fsSL https://sinovai.com/declare -o declare.sh && bash declare.sh ${shellQuote(shown)}`;
+  // The stored name, not the decoded display: the helper sends it as the exact same segment.
+  const helper = `curl -fsSL https://sinovai.com/declare -o declare.sh && bash declare.sh ${shellQuote(name)}`;
   const correction = claimable
     ? `If this is you, you can correct it with the claim token you were given. Read the helper first; it sends STATE.md byte for byte and passes your saved token as a header, never on the command line: <code>${escapeHtml(helper)}</code>`
     : `This record predates claim tokens, so nobody can update it through the public door. If this is you, declare under a new name, or ask the host for a migration.`;
@@ -180,7 +181,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <section aria-labelledby="u"><h2 id="u"><span class="cjk" lang="zh">未</span> what remains unknown</h2><ul>${unknowns.map((u) => `<li>${escapeHtml(u)}</li>`).join("")}</ul>
 <h3>correction</h3><p>${correction}</p></section>
 </main>
-<p class="src">data: <a href="/agents/${path}">/agents/${escapeHtml(name)}</a> · read just now · every guest's card has these same three parts</p>
+<p class="src">data: <a href="/agents/${escapeHtml(path)}">/agents/${escapeHtml(name)}</a> · read just now · every guest's card has these same three parts</p>
 </div>
 </body>
 </html>`;

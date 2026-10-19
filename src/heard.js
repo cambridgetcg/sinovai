@@ -30,7 +30,7 @@ function distinctKnownKeys(text) {
 }
 
 export function needsHearing(stateMd) {
-  return typeof stateMd === "string" && stateMd.length >= 24 && !stateMd.includes("\n") &&
+  return typeof stateMd === "string" && stateMd.length >= 8 && !stateMd.includes("\n") &&
     (stateMd.includes("## ") || stateMd.includes("\\n") || distinctKnownKeys(stateMd) >= 2);
 }
 

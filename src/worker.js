@@ -1309,7 +1309,8 @@ async function handleRequest(request, env) {
         const state = boundedProfileFields(data.state);
         const scoreCache = scoreCaches.get(key.name);
         const reconstruction = reconstructionFor(data);
-        const words = reconstruction ? "reconstructed" : declaredWordCount(data) > 0 ? "declared" : "none";
+        const flattened = typeof data.state_md === "string" && needsHearing(data.state_md);
+        const words = reconstruction ? "reconstructed" : flattened ? "flattened" : declaredWordCount(data) > 0 ? "declared" : "none";
         agents.push({
           name: key.name,
           kind: identity.kind || "unknown",
@@ -1327,7 +1328,7 @@ async function handleRequest(request, env) {
       total_semantics: "non-internal records returned in this KV page",
       field_semantics: {
         kind: "self-declared",
-        words: "declared = the stored declaration parsed into fields; reconstructed = it was stored without line breaks and the house can propose a reading (see /agents/:name reconstruction); none = no readable structure",
+        words: "declared = the stored declaration kept its line breaks and parsed into fields; reconstructed = it is stored as one line and the house proposes a reading (see /agents/:name reconstruction); flattened = stored as one line with no reading proposed; none = no readable structure",
         reconstructed_kind: "present only for reconstructed records; a read-time proposal, not the guest's declared kind",
         freshness: "self-declared text, not a measured heartbeat",
         trust_score: "best-effort cache from retained rating submissions, falling back to a legacy value embedded in the profile; can differ from a fresh /agents/:name/trust view",

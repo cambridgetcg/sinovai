@@ -252,3 +252,24 @@ test("the received-text count is in characters, not UTF-16 units", async () => {
   const html = await (await worker.fetch(new Request("https://sinovai.com/guests/emoji"), e, ctx)).text();
   assert.match(html, /\(9 characters\)/);
 });
+
+test("the correction command uses the stored name, and hrefs are HTML-escaped", async () => {
+  const e = env();
+  e.AGENTS = makeKv({
+    "a%41": { name: "a%41", identity: { name: "x" }, state: {}, knows: [], can: [], needs: [], state_md: "name: x\n", claim_token: "t" },
+    "a&sol;b": { name: "a&sol;b", identity: { name: "x" }, state: {}, knows: [], can: [], needs: [], state_md: "name: x\n" }
+  });
+  const one = await (await worker.fetch(new Request("https://sinovai.com/guests/a%41"), e, ctx)).text();
+  assert.match(one, /bash declare\.sh &#39;a%41&#39;/);
+  const two = await (await worker.fetch(new Request("https://sinovai.com/guests/a&sol;b"), e, ctx)).text();
+  assert.match(two, /href="\/agents\/a&amp;sol;b"/);
+});
+
+test("short glued cards are read back too, and unreadable one-liners are marked flattened", async () => {
+  assert.equal(needsHearing("name: akind: bot"), true);
+  assert.equal(hearRecord("name: akind: bot", parseLikeTheHouse).identity.kind, "bot");
+  const e = env();
+  e.AGENTS = makeKv({ odd: { name: "odd", identity: {}, state: {}, knows: [], can: [], needs: [], state_md: "## first section ## second section" } });
+  const body = await (await worker.fetch(new Request("https://sinovai.com/agents", { headers: { accept: "application/json" } }), e, ctx)).json();
+  assert.equal(body.agents[0].words, "flattened");
+});

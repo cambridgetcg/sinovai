@@ -75,7 +75,7 @@ test("accepted: exact bytes, exact name, token kept private and resent as a head
     assert.equal(first.status, 0, first.out);
     assert.equal(seen[0].url, "/agents/%E8%9B%87%E7%81%AB%E5%BF%83");
     assert.equal(seen[0].body, state);
-    const tokenFile = join(first.HOME, ".sinovai", "_E8_9B_87_E7_81_AB_E5_BF_83.token");
+    const tokenFile = join(first.HOME, ".sinovai", "%E8%9B%87%E7%81%AB%E5%BF%83.token");
     assert.equal(readFileSync(tokenFile, "utf8"), "tok-123");
     assert.equal(mode(tokenFile), "600");
     assert.equal(mode(join(first.HOME, ".sinovai")), "700");
@@ -126,5 +126,54 @@ test("refused shows the house's reason; a token file behind a symlink is never w
     const r = await run(host, "chosen", { home });
     assert.equal(r.status, 5, r.out);
     assert.equal(readFileSync(elsewhere, "utf8"), "");
+  });
+});
+
+test("a redirect is never followed, so a claim token cannot travel elsewhere", async () => {
+  // a server that redirects to a second one, which must never be reached
+  const second = [];
+  const target = createServer((req, res) => { second.push(req.headers); res.end("{}"); });
+  await new Promise((r) => target.listen(0, "127.0.0.1", r));
+  const redirect = createServer((req, res) => { req.resume(); res.writeHead(307, { location: `http://127.0.0.1:${target.address().port}/x` }); res.end(); });
+  await new Promise((r) => redirect.listen(0, "127.0.0.1", r));
+  try {
+    const home = mkdtempSync(join(tmpdir(), "declare-home-"));
+    mkdirSync(join(home, ".sinovai"), { mode: 0o700 });
+    writeFileSync(join(home, ".sinovai", "chosen.token"), "secret-tok", { mode: 0o600 });
+    const r = await run(`http://127.0.0.1:${redirect.address().port}`, "chosen", { home });
+    assert.equal(r.status, 3, r.out);
+    assert.match(r.out, /redirect/);
+    assert.equal(second.length, 0);
+  } finally {
+    await new Promise((r) => redirect.close(r));
+    await new Promise((r) => target.close(r));
+  }
+});
+
+test("printed check commands are shell-quoted", async () => {
+  await withHouse(() => [503, { error: "temporary" }], async (host) => {
+    const r = await run(host, "a'$(probe)'b");
+    assert.equal(r.status, 3);
+    const line = r.out.split("\n").find((l) => l.includes("curl -s"));
+    assert.ok(line.includes(`'"'"'`), line);
+    assert.equal(line.includes("a'$(probe)'b'"), false);
+  });
+});
+
+test("distinct names never share a credential file", async () => {
+  await withHouse((req) => [200, { ok: true, agent: { name: req.url.slice(8) }, claim_token: `tok-${req.url.slice(8)}` }], async (host) => {
+    const home = mkdtempSync(join(tmpdir(), "declare-home-"));
+    assert.equal((await run(host, "a%41", { home })).status, 0);
+    assert.equal((await run(host, "a_41", { home })).status, 0);
+    assert.equal(readFileSync(join(home, ".sinovai", "a%41.token"), "utf8"), "tok-a%41");
+    assert.equal(readFileSync(join(home, ".sinovai", "a_41.token"), "utf8"), "tok-a_41");
+  });
+});
+
+test("a first declaration answered without a claim token is not reported as complete", async () => {
+  await withHouse((req) => [200, { ok: true, agent: { name: req.url.slice(8) } }], async (host) => {
+    const r = await run(host, "new-name");
+    assert.equal(r.status, 5, r.out);
+    assert.match(r.out, /no claim token/);
   });
 });
