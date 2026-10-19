@@ -25,7 +25,7 @@ if [ "$#" -ne 1 ] || [ -z "$1" ]; then
   exit 2
 fi
 exec python3 - "$1" <<'PY'
-import json, os, shlex, stat, sys, time, urllib.error, urllib.parse, urllib.request
+import hashlib, json, os, re, shlex, stat, sys, time, urllib.error, urllib.parse, urllib.request
 
 HOST = os.environ.get("SINOVAI_DECLARE_HOST", "https://sinovai.com")   # override only for local testing
 name = sys.argv[1]
@@ -70,7 +70,9 @@ def private_dir(path):
     return path
 private_dir(home)
 responses = private_dir(os.path.join(home, "responses"))
-fname = segment   # the exact segment: distinct names never share a file ('/' was refused above)
+# One file per exact segment on any filesystem, including case-insensitive
+# ones: a readable prefix plus a digest of the exact bytes.
+fname = re.sub(r"[^a-z0-9._-]", "_", segment.lower())[:40] + "-" + hashlib.sha256(segment.encode()).hexdigest()[:16]
 
 def write_private(path, data):
     """Atomic, mode 600, never through an existing link. Returns an error string or None."""
@@ -136,9 +138,19 @@ if status >= 500 or status < 200:
     if isinstance(candidate, str) and candidate:
         cpath = os.path.join(home, f"{fname}.candidate-token")
         err = write_private(cpath, candidate)
-        lines.append(f"an UNCONFIRMED candidate claim token was saved to {cpath}" if not err else f"a candidate claim token is in the saved response; it could not be copied ({err}).")
-        lines.append("it stays unconfirmed even if the record exists: two first claims at once can leave a different token in control.")
-        lines.append(f"to test it: move it to {token_path} and run this helper again. Acceptance confirms it; a 403 means another token controls the name.")
+        if not err:
+            lines.append(f"an UNCONFIRMED candidate claim token was saved to {cpath}")
+        elif not save_error:
+            lines.append(f"a candidate claim token is in {saved}; it could not be copied ({err}).")
+        else:
+            lines += ["a candidate claim token came back, and nothing could be saved. So it is not lost, here it is once (UNCONFIRMED; keep it private):", f"  {candidate}"]
+        lines += [
+            "it stays unconfirmed even if the record exists: two first claims at once can leave a different token in control.",
+            "first check whether the record exists (command below).",
+            f"  if it does NOT exist, the write never committed: discard the candidate and declare again.",
+            f"  if it DOES, you can try the candidate by moving it to {token_path} and declaring again. That re-sends your STATE.md:",
+            "  an acceptance with no new token means the candidate controls the name; a 403 means another token does.",
+        ]
     lines += ["check before trying again:", check, saved_note]
     fail(3, *lines)
 
@@ -157,6 +169,8 @@ if 200 <= status < 300:
             # Nothing could be kept anywhere: showing it once is the only way not to lose it.
             fail(5, f"accepted (HTTP {status}), but neither the claim token ({err}) nor the response ({save_error}) could be saved.",
                  "so it is not lost, here it is once. Keep it private:", f"  {token}")
+        if token_sent:
+            print("the house created this name just now, so the token you sent was not used; the new one is saved instead.")
         print(f"claim token saved to {token_path} (it is sent again for you next time).")
     elif not token_sent:
         fail(5, f"accepted (HTTP {status}), but the house returned no claim token for this first declaration.",

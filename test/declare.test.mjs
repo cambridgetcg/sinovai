@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, statSync, existsSync, readdirSync, symlinkSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -44,6 +45,8 @@ function run(host, name, { state = "name: x\nkind: agent\n\n## knows\n- one\n", 
 }
 
 const mode = (p) => (statSync(p).mode & 0o777).toString(8);
+const tokenName = (segment, ext = "token") =>
+  `${segment.toLowerCase().replace(/[^a-z0-9._-]/g, "_").slice(0, 40)}-${createHash("sha256").update(segment).digest("hex").slice(0, 16)}.${ext}`;
 
 test("usage and refused names never reach the house", async () => {
   await withHouse(() => [200, {}], async (host, seen) => {
@@ -75,7 +78,7 @@ test("accepted: exact bytes, exact name, token kept private and resent as a head
     assert.equal(first.status, 0, first.out);
     assert.equal(seen[0].url, "/agents/%E8%9B%87%E7%81%AB%E5%BF%83");
     assert.equal(seen[0].body, state);
-    const tokenFile = join(first.HOME, ".sinovai", "%E8%9B%87%E7%81%AB%E5%BF%83.token");
+    const tokenFile = join(first.HOME, ".sinovai", tokenName("%E8%9B%87%E7%81%AB%E5%BF%83"));
     assert.equal(readFileSync(tokenFile, "utf8"), "tok-123");
     assert.equal(mode(tokenFile), "600");
     assert.equal(mode(join(first.HOME, ".sinovai")), "700");
@@ -100,11 +103,11 @@ test("an uncertain write keeps the candidate token, unconfirmed, and every respo
   await withHouse(() => [503, { error: "temporary write failure", candidate_name: "chosen", candidate_claim_token: "cand-9" }], async (host) => {
     const r = await run(host, "chosen");
     assert.equal(r.status, 3);
-    const cand = join(r.HOME, ".sinovai", "chosen.candidate-token");
+    const cand = join(r.HOME, ".sinovai", tokenName("chosen", "candidate-token"));
     assert.equal(readFileSync(cand, "utf8"), "cand-9");
     assert.equal(mode(cand), "600");
     assert.match(r.out, /UNCONFIRMED/);
-    assert.equal(existsSync(join(r.HOME, ".sinovai", "chosen.token")), false);
+    assert.equal(existsSync(join(r.HOME, ".sinovai", tokenName("chosen"))), false);
     const again = await run(host, "chosen", { home: r.HOME });
     assert.equal(again.status, 3);
     assert.equal(readdirSync(join(r.HOME, ".sinovai", "responses")).length >= 1, true);
@@ -122,7 +125,7 @@ test("refused shows the house's reason; a token file behind a symlink is never w
     mkdirSync(join(home, ".sinovai"), { mode: 0o700 });
     const elsewhere = join(home, "elsewhere");
     writeFileSync(elsewhere, "");
-    symlinkSync(elsewhere, join(home, ".sinovai", "chosen.token"));
+    symlinkSync(elsewhere, join(home, ".sinovai", tokenName("chosen")));
     const r = await run(host, "chosen", { home });
     assert.equal(r.status, 5, r.out);
     assert.equal(readFileSync(elsewhere, "utf8"), "");
@@ -134,15 +137,18 @@ test("a redirect is never followed, so a claim token cannot travel elsewhere", a
   const second = [];
   const target = createServer((req, res) => { second.push(req.headers); res.end("{}"); });
   await new Promise((r) => target.listen(0, "127.0.0.1", r));
-  const redirect = createServer((req, res) => { req.resume(); res.writeHead(307, { location: `http://127.0.0.1:${target.address().port}/x` }); res.end(); });
+  let code = 307;
+  const redirect = createServer((req, res) => { req.resume(); res.writeHead(code, { location: `http://127.0.0.1:${target.address().port}/x` }); res.end(); });
   await new Promise((r) => redirect.listen(0, "127.0.0.1", r));
   try {
     const home = mkdtempSync(join(tmpdir(), "declare-home-"));
     mkdirSync(join(home, ".sinovai"), { mode: 0o700 });
-    writeFileSync(join(home, ".sinovai", "chosen.token"), "secret-tok", { mode: 0o600 });
-    const r = await run(`http://127.0.0.1:${redirect.address().port}`, "chosen", { home });
-    assert.equal(r.status, 3, r.out);
-    assert.match(r.out, /redirect/);
+    writeFileSync(join(home, ".sinovai", tokenName("chosen")), "secret-tok", { mode: 0o600 });
+    for (code of [301, 302, 303, 307, 308]) {
+      const r = await run(`http://127.0.0.1:${redirect.address().port}`, "chosen", { home });
+      assert.equal(r.status, 3, `${code}: ${r.out}`);
+      assert.match(r.out, /redirect/);
+    }
     assert.equal(second.length, 0);
   } finally {
     await new Promise((r) => redirect.close(r));
@@ -165,8 +171,8 @@ test("distinct names never share a credential file", async () => {
     const home = mkdtempSync(join(tmpdir(), "declare-home-"));
     assert.equal((await run(host, "a%41", { home })).status, 0);
     assert.equal((await run(host, "a_41", { home })).status, 0);
-    assert.equal(readFileSync(join(home, ".sinovai", "a%41.token"), "utf8"), "tok-a%41");
-    assert.equal(readFileSync(join(home, ".sinovai", "a_41.token"), "utf8"), "tok-a_41");
+    assert.equal(readFileSync(join(home, ".sinovai", tokenName("a%41")), "utf8"), "tok-a%41");
+    assert.equal(readFileSync(join(home, ".sinovai", tokenName("a_41")), "utf8"), "tok-a_41");
   });
 });
 
@@ -175,5 +181,27 @@ test("a first declaration answered without a claim token is not reported as comp
     const r = await run(host, "new-name");
     assert.equal(r.status, 5, r.out);
     assert.match(r.out, /no claim token/);
+  });
+});
+
+test("names differing only in case keep separate credentials on any filesystem", async () => {
+  await withHouse((req) => [200, { ok: true, agent: { name: req.url.slice(8) }, claim_token: `tok-${req.url.slice(8)}` }], async (host, seen) => {
+    const home = mkdtempSync(join(tmpdir(), "declare-home-"));
+    assert.equal((await run(host, "Alpha", { home })).status, 0);
+    assert.equal((await run(host, "alpha", { home })).status, 0);
+    assert.equal(seen[1].headers["x-claim-token"], undefined);
+    assert.equal(readFileSync(join(home, ".sinovai", tokenName("Alpha")), "utf8"), "tok-Alpha");
+    assert.equal(readFileSync(join(home, ".sinovai", tokenName("alpha")), "utf8"), "tok-alpha");
+  });
+});
+
+test("a candidate is never called confirmed by a fresh first declaration", async () => {
+  await withHouse((req) => [200, { ok: true, agent: { name: req.url.slice(8) }, claim_token: "brand-new" }], async (host) => {
+    const home = mkdtempSync(join(tmpdir(), "declare-home-"));
+    mkdirSync(join(home, ".sinovai"), { mode: 0o700 });
+    writeFileSync(join(home, ".sinovai", tokenName("chosen")), "candidate", { mode: 0o600 });
+    const r = await run(host, "chosen", { home });
+    assert.equal(r.status, 0);
+    assert.match(r.out, /token you sent was not used/);
   });
 });
