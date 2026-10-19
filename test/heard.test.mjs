@@ -40,6 +40,9 @@ function env() {
     AGENTS: makeKv({
       ALETHEIA: { name: "ALETHEIA", identity: {}, state: {}, knows: [], can: [], needs: [], state_md: GLUED, declared_at: "2026-07-05T15:16:39.389Z" },
       sol: { name: "sol", identity: { name: "sol", kind: "agent" }, state: { freshness: "live" }, knows: ["surface contracts"], can: [], needs: [], state_md: INTACT, claim_token: "server-secret-sol" },
+      "name-first": { name: "name-first", identity: { name: "fixturekind: agentlanguage: en" }, state: {}, knows: [], can: [], needs: [], state_md: "name: fixturekind: agentlanguage: en## knows- one thing- another" },
+      "%E8%B3%93": { name: "%E8%B3%93", identity: { name: "賓" }, state: {}, knows: [], can: [], needs: [], state_md: "name: 賓\n", claim_token: "t" },
+      "$(id)": { name: "$(id)", identity: { name: "x" }, state: {}, knows: [], can: [], needs: [], state_md: "name: x\n", claim_token: "t" },
       "xss-probe": { name: "xss-probe", identity: {}, state: {}, knows: [], can: [], needs: [], state_md: "# <img src=x onerror=alert(1)> — STATEname: <b>bold</b>kind: test## knows- <script>alert(1)</script>" }
     }),
     INTERACTIONS: makeKv({
@@ -125,7 +128,7 @@ test("every guest's card has the same three parts", async () => {
   const declared = await (await get("/guests/sol")).text();
   assert.match(declared, /As declared, in the guest's own lines/);
   assert.match(declared, /met at the door/);
-  assert.match(declared, /X-Claim-Token/);
+  assert.match(declared, /bash declare\.sh &#39;sol&#39;/);
   assert.equal(declared.includes("server-secret-sol"), false);
 });
 
@@ -151,10 +154,45 @@ test("/declare serves the same script as declare.sh, which keeps line breaks and
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/plain/);
   assert.equal(await response.text(), file);
-  assert.match(file, /--data-binary @STATE\.md/);
+  assert.match(file, /open\("STATE\.md", "rb"\)/);           // byte for byte
   assert.equal(/ -d @STATE\.md/.test(file), false);
-  assert.equal(/\$\(hostname\)/.test(file), false);
-  assert.equal(/health: green/.test(file), false);
-  assert.match(file, /umask 077/);
+  assert.equal(/hostname/.test(file), false);                  // no name chosen for you
+  assert.equal(/health: green/.test(file), false);             // nothing invented
+  assert.match(file, /headers\["X-Claim-Token"\]/);           // token as a header, not argv
   assert.match(file, /outcome unknown/);
+  assert.match(file, /UNCONFIRMED/);
+});
+
+test("a glued card that partly parsed is still read back, not called the guest's own lines", async () => {
+  const body = await (await get("/agents", "application/json")).json();
+  const row = body.agents.find((a) => a.name === "name-first");
+  assert.equal(row.words, "reconstructed");
+  const html = await (await get("/guests/name-first")).text();
+  assert.equal(html.includes("As declared, in the guest's own lines"), false);
+  assert.match(html, /a proposal, not the guest's words/);
+  assert.match(html, /how the house parsed the text as received/);
+  assert.match(html, /<dt>kind<\/dt><dd>agent<\/dd>/);
+});
+
+test("percent-encoded names link to their own records, not double-encoded ones", async () => {
+  const html = await (await get("/guests/%E8%B3%93")).text();
+  assert.match(html, /href="\/agents\/%E8%B3%93"/);
+  assert.equal(html.includes("%25E8"), false);
+  assert.match(html, /<h1>賓<\/h1>/);
+});
+
+test("the correction command is shell-quoted, so a name cannot run anything", async () => {
+  const html = await (await get(`/guests/${encodeURIComponent("$(id)").replace(/%24/g, "$").replace(/%28/g, "(").replace(/%29/g, ")")}`)).text();
+  assert.match(html, /bash declare\.sh &#39;\$\(id\)&#39;/);
+  assert.equal(/X-Claim-Token: …/.test(html), false);
+});
+
+test("an unreadable ledger is said once, consistently, and never as 'no rating'", async () => {
+  const e = env();
+  e.INTERACTIONS = { ...e.INTERACTIONS, async get(key, type) { if (typeof key === "string" && key.endsWith(":all")) throw new Error("kv down"); return null; } };
+  const response = await worker.fetch(new Request("https://sinovai.com/guests/sol"), e, ctx);
+  const html = await response.text();
+  assert.match(html, /ledger unavailable/);
+  assert.equal(html.includes("no rating recorded"), false);
+  assert.equal(html.includes("No rating of this guest"), false);
 });

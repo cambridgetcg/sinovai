@@ -74,7 +74,7 @@ export const MUSEUM_CATALOGUE = {
     },
     {
       title: "the city that was never heard",
-      fact: "104 of 115 cards had arrived with their line breaks stripped (curl -d), so the house read them as blank. Since 2026-10-19 each is read back as a marked reconstruction beside the text as received, and every guest hangs as a whole door; being unrated no longer empties a frame",
+      fact: "a read of the live roster on 2026-10-19 found 104 of 115 cards stored without line breaks, so the house had parsed them as blank (curl -d, which strips line breaks from files, is a compatible explanation, not an established one). This version proposes a marked reconstruction beside the text as received where it can (103 of those 104 in that read) and hangs every guest as a whole door; being unrated no longer empties a frame",
       source: "GET /agents (words) · GET /guests/:name",
       as_of: "2026-10-19"
     },

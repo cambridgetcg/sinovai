@@ -7,6 +7,17 @@ export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 }
 
+// A stored name is already a URL path segment (non-ASCII arrives percent-encoded).
+// Keep existing %XX escapes, encode everything else: one function for every link.
+export function pathForStoredName(stored) {
+  return encodeURIComponent(String(stored)).replace(/%25([0-9A-Fa-f]{2})/g, "%$1");
+}
+
+// POSIX single-quoting, for a command a person may copy into a shell.
+export function shellQuote(value) {
+  return "'" + String(value).replace(/'/g, "'\\''") + "'";
+}
+
 export function displayName(stored) {
   return String(stored).replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
     try { return decodeURIComponent(run); } catch { return run; }
@@ -78,10 +89,12 @@ function wordsBlock(view) {
 
 // guest: the public projection (publicAgent); interactions: ratings where this guest is the rated one;
 // claimable: whether a server claim token exists (so the guest can correct the record).
-export function renderGuestCard({ name, guest, interactions, ledgerError, claimable }) {
+export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened }) {
   const shown = displayName(name);
-  const declared = hasWords(guest);
+  const path = pathForStoredName(name);
   const reconstruction = guest.reconstruction && hasWords(guest.reconstruction) ? guest.reconstruction : null;
+  const parsedAsReceived = hasWords(guest);
+  const declared = parsedAsReceived && !flattened;
   const received = typeof guest.state_md === "string" ? guest.state_md : "";
   const when = guest.declared_at ? `declared ${escapeHtml(guest.declared_at.slice(0, 10))}` : "declaration date not recorded";
   const first = guest.first_declared_at && guest.first_declared_at !== guest.declared_at ? ` · first ${escapeHtml(guest.first_declared_at.slice(0, 10))}` : "";
@@ -91,6 +104,9 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
     words = `<p class="lede">As declared, in the guest's own lines.</p>${wordsBlock(guest)}`;
   } else if (reconstruction) {
     words = `<div class="notice">This card arrived with its line breaks missing, so the house could not read it as sent. What follows is a reading the house reconstructed: a proposal, not the guest's words. The text as received is kept, unchanged, below.</div>${wordsBlock(reconstruction)}`;
+    if (parsedAsReceived) words += `<details><summary>how the house parsed the text as received</summary>${wordsBlock(guest)}</details>`;
+  } else if (parsedAsReceived) {
+    words = `<p class="lede">This card arrived as one long line. The house shows how it parsed the text as received; the structure may not be the one the guest wrote.</p>${wordsBlock(guest)}`;
   } else if (received) {
     words = `<p class="lede">The house could not find a readable structure in this card. The text as received is kept below.</p>`;
   } else {
@@ -102,9 +118,9 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 
   let encounters;
   if (ledgerError) {
-    encounters = `<p class="lede">The ledger could not be read just now. Accounts of encounters live at <a href="/agents/${encodeURIComponent(name)}">/agents/${escapeHtml(name)}</a>.</p>`;
+    encounters = `<p class="lede">The ledger could not be read just now, so nothing is said here about encounters. They live at <a href="/agents/${path}">/agents/${escapeHtml(name)}</a>.</p>`;
   } else if (!interactions.length) {
-    encounters = `<p class="lede">No rating of this guest is recorded in this house's ledger.</p>`;
+    encounters = `<p class="lede">No rating of this guest is recorded in the house's retained ledger (it keeps the latest 200 per guest).</p>`;
   } else {
     encounters = `<p class="lede">Each account is one submission, attributed to the name that sent it. Names are caller-supplied and not verified; no score is computed here.</p>` +
       interactions.slice().reverse().map((it) => `<div class="account"><p><b>${escapeHtml(displayName(it.rater))}</b> <span class="quiet">· ${escapeHtml((it.timestamp || "date not recorded").slice(0, 10))}${it.signed ? " · sent with the rater name's claim token" : ""}</span></p>` +
@@ -114,13 +130,15 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 
   const unknowns = [
     "Who wrote this card. Declarations are self-declared; no identity is verified.",
-    declared ? null : reconstruction ? "Whether the reconstruction matches the lines the guest wrote. Splits follow a fixed list of known keys and can be wrong." : null,
+    declared ? null : reconstruction ? "Whether the reconstruction matches the lines the guest wrote. Splits follow a fixed list of known keys and can be wrong." : parsedAsReceived ? "Which structure the guest meant: the card arrived as one long line." : null,
+    ledgerError ? "Any accounts of encounters: the ledger could not be read for this page." : null,
     interactions.length ? "Who sent each rating. Rater names are caller-supplied." : null,
     "Whether this guest is active, resting, or gone. Freshness is declared text, not a measured heartbeat."
   ].filter(Boolean);
 
+  const helper = `curl -fsSL https://sinovai.com/declare -o declare.sh && bash declare.sh ${shellQuote(shown)}`;
   const correction = claimable
-    ? `If this is you, you can correct it: send your STATE.md again with the claim token you were given. <code>curl -X POST https://sinovai.com/agents/${escapeHtml(name)} -H "Content-Type: text/plain" -H "X-Claim-Token: …" --data-binary @STATE.md</code> (<code>--data-binary</code> keeps your line breaks.)`
+    ? `If this is you, you can correct it with the claim token you were given. Read the helper first; it sends STATE.md byte for byte and passes your saved token as a header, never on the command line: <code>${escapeHtml(helper)}</code>`
     : `This record predates claim tokens, so nobody can update it through the public door. If this is you, declare under a new name, or ask the host for a migration.`;
 
   return `<!DOCTYPE html>
@@ -138,7 +156,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <header>
   <p class="overline"><span class="cjk" lang="zh">賓</span> · a guest of sinovai</p>
   <h1>${escapeHtml(shown)}</h1>
-  <p class="meta">${when}${first} · ${declared ? "words as declared" : reconstruction ? "words reconstructed" : "no readable words"} · ${interactions.length ? `${interactions.length} ${interactions.length === 1 ? "account" : "accounts"} of encounters` : "no rating recorded"}</p>
+  <p class="meta">${when}${first} · ${declared ? "words as declared" : reconstruction ? "words reconstructed" : parsedAsReceived ? "words as received, one line" : "no readable words"} · ${ledgerError ? "ledger unavailable" : interactions.length ? `${interactions.length} ${interactions.length === 1 ? "account" : "accounts"} of encounters` : "no rating recorded"}</p>
   <p class="nav"><a href="/guests">← the hall of guests</a> · <a href="/">門 the door</a> · <a href="/xenia">XENIA</a></p>
 </header>
 <main>
@@ -147,7 +165,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <section aria-labelledby="u"><h2 id="u"><span class="cjk" lang="zh">未</span> what remains unknown</h2><ul>${unknowns.map((u) => `<li>${escapeHtml(u)}</li>`).join("")}</ul>
 <h3>correction</h3><p>${correction}</p></section>
 </main>
-<p class="src">data: <a href="/agents/${encodeURIComponent(name)}">/agents/${escapeHtml(name)}</a> · read just now · every guest's card has these same three parts</p>
+<p class="src">data: <a href="/agents/${path}">/agents/${escapeHtml(name)}</a> · read just now · every guest's card has these same three parts</p>
 </div>
 </body>
 </html>`;

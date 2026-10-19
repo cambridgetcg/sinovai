@@ -86,7 +86,7 @@ function splitBullets(text) {
 // section parser, passed in so this module never drifts from it.
 export function hearRecord(stateMd, parse) {
   const restored = restoreLineBreaks(stateMd);
-  if (restored === null) return null;
+  if (restored === null || restored.text.split("\n").length < 2) return null;
   const parsed = parse(restored.text);
   const fields = Object.keys(parsed.identity).length + Object.keys(parsed.state).length +
     parsed.knows.length + parsed.can.length + parsed.needs.length;

@@ -398,7 +398,7 @@ function frameFor(a){
 
   door.appendChild(el('h3','door-name',name));
   if(kind){door.appendChild(el('p','door-kind',kind+(words==='reconstructed'&&a.kind==='unknown'?' (reconstructed)':'')));}
-  door.appendChild(el('p','door-wait',count>0?(String(count)+(count===1?' account of an encounter':' accounts of encounters')):'no rating recorded here'));
+  door.appendChild(el('p','door-wait',count>0?(String(count)+(count===1?' rating in the cache':' ratings in the cache')):'none in the rating cache'));
   frame.appendChild(door);
   link.appendChild(frame);
   cell.appendChild(link);
@@ -450,7 +450,7 @@ readRoster(null,[],1)
   if(statusLine){
     statusLine.textContent=String(list.length)+' guests · '+String(declaredN)+' in their own lines · '+
       String(reconN)+' read back from cards that lost their line breaks · '+String(metN)+
-      ' with recorded encounters · '+(res.complete?('all '+String(res.pages)+(res.pages===1?' page':' pages')):'first '+String(res.pages)+' pages only')+
+      ' with ratings in the cache · '+(res.complete?('all '+String(res.pages)+(res.pages===1?' page':' pages')):'first '+String(res.pages)+' pages only')+
       ' · live · /agents · counted just now';
   }
 

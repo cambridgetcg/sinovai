@@ -24,7 +24,7 @@ import {
 } from "./rest.js";
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
 import { MUSEUM_CATALOGUE } from "./pages/museum-catalogue.js";
-import { hearRecord } from "./heard.js";
+import { hearRecord, needsHearing } from "./heard.js";
 import { renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
 import { DECLARE_SH } from "./declare-script.js";
 import { createXeniaResponse } from "./xenia-response.js";
@@ -90,7 +90,7 @@ function declaredWordCount(agent) {
 }
 __name(declaredWordCount, "declaredWordCount");
 function reconstructionFor(agent) {
-  if (declaredWordCount(agent) > 0 || typeof agent?.state_md !== "string") return null;
+  if (typeof agent?.state_md !== "string" || !needsHearing(agent.state_md)) return null;
   const view = hearRecord(agent.state_md, parseStateMd);
   if (!view) return null;
   return {
@@ -1185,7 +1185,8 @@ async function handleRequest(request, env) {
       guest: publicAgent(stored, name),
       interactions: error ? [] : interactions.filter((it) => it.rated === name),
       ledgerError: !!error,
-      claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0
+      claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0,
+      flattened: typeof stored.state_md === "string" && needsHearing(stored.state_md)
     });
     return new Response(html, { headers });
   }
@@ -1295,7 +1296,7 @@ async function handleRequest(request, env) {
         const state = boundedProfileFields(data.state);
         const scoreCache = scoreCaches.get(key.name);
         const reconstruction = reconstructionFor(data);
-        const words = declaredWordCount(data) > 0 ? "declared" : reconstruction ? "reconstructed" : "none";
+        const words = reconstruction ? "reconstructed" : declaredWordCount(data) > 0 ? "declared" : "none";
         agents.push({
           name: key.name,
           kind: identity.kind || "unknown",
