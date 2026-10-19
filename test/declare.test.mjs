@@ -107,6 +107,8 @@ test("an uncertain write keeps the candidate token, unconfirmed, and every respo
     assert.equal(readFileSync(cand, "utf8"), "cand-9");
     assert.equal(mode(cand), "600");
     assert.match(r.out, /UNCONFIRMED/);
+    assert.match(r.out, /keep the candidate/);
+    assert.equal(/discard/i.test(r.out), false);
     assert.equal(existsSync(join(r.HOME, ".sinovai", tokenName("chosen"))), false);
     const again = await run(host, "chosen", { home: r.HOME });
     assert.equal(again.status, 3);

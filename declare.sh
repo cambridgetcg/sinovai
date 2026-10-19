@@ -146,9 +146,9 @@ if status >= 500 or status < 200:
             lines += ["a candidate claim token came back, and nothing could be saved. So it is not lost, here it is once (UNCONFIRMED; keep it private):", f"  {candidate}"]
         lines += [
             "it stays unconfirmed even if the record exists: two first claims at once can leave a different token in control.",
-            "first check whether the record exists (command below).",
-            f"  if it does NOT exist, the write never committed: discard the candidate and declare again.",
-            f"  if it DOES, you can try the candidate by moving it to {token_path} and declaring again. That re-sends your STATE.md:",
+            "keep the candidate whatever you see next: a missing record does not prove the write failed (reads can lag).",
+            "check whether the record is visible (command below). If it is not yet, check again later before doing anything.",
+            f"if it is, you can try the candidate by moving it to {token_path} and declaring again. That re-sends your STATE.md:",
             "  an acceptance with no new token means the candidate controls the name; a 403 means another token does.",
         ]
     lines += ["check before trying again:", check, saved_note]
@@ -161,6 +161,8 @@ if 200 <= status < 300:
              "check:", check, saved_note)
     token = data.get("claim_token")
     if isinstance(token, str) and token:
+        if token_sent:
+            print("the house created this name just now, so the token you sent was not used; the new one replaces it.")
         err = write_private(token_path, token)
         if err:
             if not save_error:
@@ -169,8 +171,6 @@ if 200 <= status < 300:
             # Nothing could be kept anywhere: showing it once is the only way not to lose it.
             fail(5, f"accepted (HTTP {status}), but neither the claim token ({err}) nor the response ({save_error}) could be saved.",
                  "so it is not lost, here it is once. Keep it private:", f"  {token}")
-        if token_sent:
-            print("the house created this name just now, so the token you sent was not used; the new one is saved instead.")
         print(f"claim token saved to {token_path} (it is sent again for you next time).")
     elif not token_sent:
         fail(5, f"accepted (HTTP {status}), but the house returned no claim token for this first declaration.",
