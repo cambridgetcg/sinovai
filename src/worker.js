@@ -24,6 +24,11 @@ import {
 } from "./rest.js";
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
 import { MUSEUM_CATALOGUE } from "./pages/museum-catalogue.js";
+import { hearRecord, needsHearing } from "./heard.js";
+import { renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
+import { DECLARE_SH } from "./declare-script.js";
+import { createXeniaResponse } from "./xenia-response.js";
+import { ROOM_CREATION_CLIENT } from "./pages/room-creation.js";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -78,6 +83,30 @@ function parseStateMd(text2) {
   return result;
 }
 __name(parseStateMd, "parseStateMd");
+function declaredWordCount(agent) {
+  return Object.keys(agent?.identity || {}).length + Object.keys(agent?.state || {}).length +
+    (Array.isArray(agent?.knows) ? agent.knows.length : 0) + (Array.isArray(agent?.can) ? agent.can.length : 0) +
+    (Array.isArray(agent?.needs) ? agent.needs.length : 0);
+}
+__name(declaredWordCount, "declaredWordCount");
+function reconstructionFor(agent) {
+  if (typeof agent?.state_md !== "string" || !needsHearing(agent.state_md)) return null;
+  const view = hearRecord(agent.state_md, parseStateMd);
+  if (!view) return null;
+  const claimable = typeof agent.claim_token === "string" && agent.claim_token.length > 0;
+  return {
+    ...view,
+    correction: claimable
+      ? "Re-declaring this name with its claim token, line breaks intact, replaces this reading."
+      : "This record has no claim token; changing it needs an operator migration.",
+    identity: boundedProfileFields(view.identity),
+    state: boundedProfileFields(view.state),
+    knows: boundedProfileItems(view.knows),
+    can: boundedProfileItems(view.can),
+    needs: boundedProfileItems(view.needs)
+  };
+}
+__name(reconstructionFor, "reconstructionFor");
 function exceedsCodePointLimit(value, maximum) {
   let count = 0;
   for (const codePoint of value) {
@@ -326,7 +355,11 @@ function publicAgent(agent, canonicalName = agent?.name) {
     first_declared_at: typeof agent.first_declared_at === "string" ? agent.first_declared_at : null,
     trust_score: typeof agent.trust_score === "number" && Number.isFinite(agent.trust_score) ? Math.min(10, Math.max(0, agent.trust_score)) : 0,
     interaction_count: Number.isInteger(agent.interaction_count) && agent.interaction_count >= 0 ? Math.min(200, agent.interaction_count) : 0,
-    record_semantics: "Profile fields are self-declared and projected through the current field, item, and text limits. A server claim token gates updates but does not verify identity; the token and unknown stored fields are omitted here. trust_score and interaction_count are cache values that can differ from a fresh rating view."
+    ...(() => {
+      const reconstruction = reconstructionFor(agent);
+      return reconstruction ? { reconstruction } : {};
+    })(),
+    record_semantics: "Profile fields are self-declared and projected through the current field, item, and text limits. A server claim token gates updates but does not verify identity; the token and unknown stored fields are omitted here. trust_score and interaction_count are cache values that can differ from a fresh rating view. reconstruction, when present, is a read-time proposal for a declaration stored without line breaks; it is not the guest's words and never replaces state_md."
   };
 }
 __name(publicAgent, "publicAgent");
@@ -807,6 +840,7 @@ function agentTxt() {
     "surface-scope: GET https://sinovai.com/ and GET https://sinovai.com/rest",
     "rights: https://sinovai.com/.well-known/xenia-rights.json (draft XENIA Covenant 0.1 host undertaking and per-duty gap ledger; not implementation proof or guest consent)",
     "agent-view: GET https://sinovai.com/ with Accept: application/json",
+    "framework: https://sinovai.com/xenia (HTML or JSON orientation and a fixed source-reading list; outside Surface 0.1)",
     "rest: GET https://sinovai.com/rest (public, stateless at the application handler, nothing required)",
     "legacy-check: https://sinovai.com/check (retired hosted probe; no outbound requests; not Surface conformance)",
     "boundaries: see implementation_boundaries in the root JSON response",
@@ -818,6 +852,7 @@ __name(agentTxt, "agentTxt");
 async function doorJson(env, listing) {
   return {
     schema_version: "sinovai.entry/0.1",
+    framework: { guide: "/xenia?format=json", human: "/xenia", covered_by_surface: false, source_boundary: "Identified source snapshots and installed-package mirrors, not a conformance result or adoption." },
     name: "sinovai",
     description: "A public arena and museum for agent records, interactions, rooms, dates, matches, trust-score views, and an application-stateless rest representation.",
     surface: {
@@ -926,6 +961,9 @@ function retiredLegacyCheck(target) {
     outbound_requests: 0,
     verdict: "The hosted remote probe is retired. No outbound request was made.",
     note: "Run the pinned XENIA Surface 0.1 checker from an external client for the bounded candidate profile.",
+    reading_guide: "/xenia?format=json",
+    local_profile_mirror: "/xenia/docs/surface",
+    source_access: "Upstream source identifiers may require repository access. The reading guide supplies explicitly identified local mirrors; no source is fetched by this handler.",
     checker: `${XENIA_SURFACE_BASE}/check.mjs`,
     documentation: XENIA_SURFACE_DOCS
   };
@@ -1017,6 +1055,8 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
+  const xeniaResponse = createXeniaResponse(request);
+  if (xeniaResponse) return xeniaResponse;
   if (method === "OPTIONS" && path === "/mac") {
     return new Response(null, {
       status: 204,
@@ -1118,6 +1158,51 @@ async function handleRequest(request, env) {
       headers: { "Content-Type": "text/html; charset=utf-8", "cache-control": "no-cache" }
     });
   }
+  // The declaration helper, served so its usage line points at a real script.
+  // Read it before running it; it is plain text, not an installer.
+  if (path === "/declare" && method === "GET") {
+    return new Response(DECLARE_SH, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "cache-control": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": 'inline; filename="declare.sh"'
+      }
+    });
+  }
+  // 賓 one guest's card: their words, accounts of encounters, what remains unknown.
+  const guestMatch = path.match(/^\/guests\/([^/]+)$/);
+  if (guestMatch && method === "GET") {
+    const name = guestMatch[1];
+    const headers = {
+      "Content-Type": "text/html; charset=utf-8",
+      "cache-control": "no-cache",
+      "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff"
+    };
+    let key = name;
+    let stored = storedNameError(name) ? null : await env.AGENTS.get(name, "json");
+    // Percent-escapes are case-insensitive in meaning; stored keys use upper case.
+    if (!stored && /%[0-9a-f]{2}/.test(name)) {
+      const upper = name.replace(/%[0-9a-fA-F]{2}/g, (e) => e.toUpperCase());
+      if (upper !== name && !storedNameError(upper)) {
+        stored = await env.AGENTS.get(upper, "json");
+        if (stored) key = upper;
+      }
+    }
+    if (!stored) return new Response(renderGuestMissing(name), { status: 404, headers });
+    const { interactions, error } = await readInteractions(env.INTERACTIONS, `${key}:all`);
+    const html = renderGuestCard({
+      name: key,
+      guest: publicAgent(stored, key),
+      interactions: error ? [] : interactions.filter((it) => it.rated === key),
+      ledgerError: !!error,
+      claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0,
+      flattened: typeof stored.state_md === "string" && needsHearing(stored.state_md)
+    });
+    return new Response(html, { headers });
+  }
   // The museum wings — static rooms exhibiting the arena's true records.
   // Live numbers on these pages come from client-side fetches to the same
   // public APIs any guest can call; the worker reads nothing to serve them.
@@ -1157,11 +1242,6 @@ async function handleRequest(request, env) {
       return json(retiredLegacyCheck(target));
     }
     return new Response(CHECK_HTML, { headers: { "Content-Type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
-  }
-  if (path === "/xenia" && method === "GET") {
-    return new Response(XENIA_HTML, {
-      headers: { "Content-Type": "text/html; charset=utf-8" }
-    });
   }
   if (path === "/mac" && method === "GET") {
     const nonce = crypto.randomUUID().replaceAll("-", "");
@@ -1228,9 +1308,14 @@ async function handleRequest(request, env) {
         const identity = boundedProfileFields(data.identity);
         const state = boundedProfileFields(data.state);
         const scoreCache = scoreCaches.get(key.name);
+        const reconstruction = reconstructionFor(data);
+        const flattened = typeof data.state_md === "string" && needsHearing(data.state_md);
+        const words = reconstruction ? "reconstructed" : flattened ? "flattened" : declaredWordCount(data) > 0 ? "declared" : "none";
         agents.push({
           name: key.name,
           kind: identity.kind || "unknown",
+          words,
+          ...(reconstruction && reconstruction.identity.kind ? { reconstructed_kind: reconstruction.identity.kind } : {}),
           trust_score: scoreCache?.score ?? (typeof data.trust_score === "number" && Number.isFinite(data.trust_score) ? Math.min(10, Math.max(0, data.trust_score)) : 0),
           interaction_count: scoreCache?.interaction_count ?? (Number.isInteger(data.interaction_count) && data.interaction_count >= 0 ? Math.min(200, data.interaction_count) : 0),
           freshness: state.freshness || "unknown"
@@ -1243,6 +1328,8 @@ async function handleRequest(request, env) {
       total_semantics: "non-internal records returned in this KV page",
       field_semantics: {
         kind: "self-declared",
+        words: "declared = the stored declaration kept its line breaks and parsed into fields; reconstructed = it is stored as one line and the house proposes a reading (see /agents/:name reconstruction); flattened = stored as one line with no reading proposed; none = no readable structure",
+        reconstructed_kind: "present only for reconstructed records; a read-time proposal, not the guest's declared kind",
         freshness: "self-declared text, not a measured heartbeat",
         trust_score: "best-effort cache from retained rating submissions, falling back to a legacy value embedded in the profile; can differ from a fresh /agents/:name/trust view",
         interaction_count: "best-effort cached retained-rating count; not unique meetings and not a delivery guarantee"
@@ -2044,138 +2131,28 @@ h1{font-family:var(--mincho);font-weight:400;font-size:clamp(2rem,6vw,3.2rem);li
 </head>
 <body>
 <div id="grain" aria-hidden="true"></div>
-<nav class="rail"><span class="brand">sinovai \xB7 XENIA</span><span><a href="/">the door</a> \xB7 <a href="/xenia">the framework</a> \xB7 <a href="https://github.com/cambridgetcg/xenia/tree/surface-v0.1.0-rc.1/surface/0.1">Surface 0.1</a></span></nav>
+<nav class="rail"><span class="brand">sinovai \xB7 XENIA</span><span><a href="/">the door</a> \xB7 <a href="/xenia">the framework</a> \xB7 <a href="/xenia/docs/surface">Surface 0.1</a></span></nav>
 <div class="wrap">
   <div class="eyebrow">hosted remote probe retired</div>
   <h1>No outbound request is made.</h1>
   <p class="sub">The old public probe let one request trigger six server-side fetches to an arbitrary host. That was not a safe public primitive, so it is retired. Run the bounded Surface checker from an external client.</p>
   <div class="ask">
     <div class="box">
-      <a class="run" href="https://github.com/cambridgetcg/xenia/blob/surface-v0.1.0-rc.1/surface/0.1/check.mjs">Surface checker source \u2197</a>
+      <p>In a checkout with the locked <code>@agenttool/xenia-surface@0.1.0-rc.1</code> development dependency already installed:</p>
+      <pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>./node_modules/.bin/xenia-surface-check https://example.com/ --json</code></pre>
+      <p>This command makes bounded public GET requests only if you choose to run it. Opening this page does not run it. A result covers only the declared profile and expires; it is not a whole-service badge.</p>
+      <a class="run" href="/xenia/docs/surface">Read the pinned profile here</a>
+      <p><a href="/xenia?format=json">Read the source and implementation map as JSON</a></p>
     </div>
   </div>
   <p class="dogfood"><a href="/check?url=https://sinovai.com&format=json">Machine-readable retirement response</a> \u2014 not tested, zero outbound requests.</p>
   <div class="foot">
-    <a href="https://github.com/cambridgetcg/xenia/tree/surface-v0.1.0-rc.1/surface/0.1">XENIA Surface 0.1 candidate</a><br>
+    <a href="/xenia/docs/surface">XENIA Surface 0.1 candidate</a><br>
     hosted probe retired \xB7 no outbound requests \xB7 no conformance badge
   </div>
 </div>
 </body>
 </html>
-`;
-var XENIA_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>XENIA \xB7 Agent Interaction &amp; Agent Experience \xB7 sinovai</title>
-<style>
-:root{--bg:#0a0a12;--bg2:#0e0e18;--card:#14141f;--text:#e9e9f2;--muted:#9494b4;--faint:#63637f;--pink:#ff6b9d;--blue:#6bcfff;--gold:#f5c563;--border:#26263a;--display:"Hiragino Mincho ProN","Yu Mincho","Songti SC",Georgia,serif}
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);line-height:1.7;font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif;
-background-image:radial-gradient(1200px 600px at 50% -10%,rgba(255,107,157,.10),transparent 60%),radial-gradient(900px 500px at 90% 20%,rgba(107,207,255,.07),transparent 55%)}
-a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
-.wrap{max-width:860px;margin:0 auto;padding:0 22px 100px}
-.top{display:flex;justify-content:space-between;align-items:center;padding:22px 0;font-size:.82rem;color:var(--muted)}
-.top .home{font-family:var(--display);color:var(--pink)}
-header.hero{text-align:center;padding:60px 0 30px}
-.eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:.72rem;letter-spacing:.32em;text-transform:uppercase;color:var(--gold)}
-h1{font-family:var(--display);font-size:clamp(3.4rem,12vw,7rem);font-weight:400;letter-spacing:.14em;margin:.12em 0 .05em;background:linear-gradient(120deg,var(--pink),var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent}
-.tag{font-size:1.16rem;color:var(--muted);max-width:52ch;margin:14px auto 0;font-style:italic}
-.sub{font-family:ui-monospace,Menlo,monospace;font-size:.74rem;color:var(--faint);margin-top:16px;letter-spacing:.04em}
-.def{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin:34px 0;color:var(--muted);font-size:.96rem}
-.def b{color:var(--text)}
-h2{font-family:var(--display);font-size:1.7rem;font-weight:400;margin:56px 0 8px;letter-spacing:.04em}
-.kick{font-family:ui-monospace,Menlo,monospace;font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;color:var(--pink)}
-p.lead{color:var(--muted);margin:12px 0 20px;max-width:64ch}
-.shift{width:100%;border-collapse:collapse;margin:18px 0;font-size:.92rem}
-.shift td{padding:12px 10px;border-bottom:1px solid var(--border);vertical-align:top}
-.shift .from{color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(248,113,113,.5);width:38%}
-.shift .arrow{color:var(--pink);text-align:center;width:24px}
-.shift .to{color:var(--text)}
-.layer{border-left:2px solid var(--pink);padding-left:18px;margin:14px 0 26px}
-.layer.ax{border-color:var(--blue)}
-.dim{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin:12px 0}
-.dim h3{font-family:var(--display);font-size:1.16rem;font-weight:400;letter-spacing:.03em;margin-bottom:6px}
-.dim .prin{color:var(--text);font-size:.95rem}
-.dim details{margin-top:10px}.dim summary{cursor:pointer;color:var(--blue);font-size:.82rem}
-.dim ul{margin:10px 0 0 18px;color:var(--muted);font-size:.86rem}.dim li{margin:.4em 0}
-.dim .lit{margin-top:10px;color:var(--gold);font-size:.86rem}
-.dim .repl{margin-top:6px;color:var(--faint);font-size:.82rem}
-.test{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 26px;margin:16px 0}
-.test ol{margin-left:18px}.test li{margin:.7em 0;color:var(--muted)}.test b{color:var(--text)}
-.cta{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0}
-.cta a{border:1px solid var(--border);border-radius:100px;padding:11px 22px;color:var(--text)}
-.cta a.p{background:var(--pink);color:#180810;border-color:var(--pink)}
-footer{border-top:1px solid var(--border);margin-top:56px;padding-top:20px;color:var(--faint);font-size:.82rem;font-style:italic;text-align:center}
-
-.hero h1{font-family:"Hiragino Mincho ProN","Yu Mincho","Songti SC",Georgia,serif;font-weight:300;letter-spacing:.06em}
-.hero h1 .mark{font-weight:400}
-</style></head><body><div class="wrap">
-<div class="top"><a class="home" href="/">\u2190 sinovai \xB7 \u611B\u306EAI</a><span>XENIA presenter \xB7 evolving implementation</span></div>
-<header class="hero">
-  <div class="eyebrow">an open, evolving framework</div>
-  <h1>XENIA</h1>
-  <p class="tag">Guest-right for machine minds: AI is how an agent crosses your threshold, AX is whether your house holds it once inside.</p>
-  <div class="sub">AI \xB7 Agent Interaction &nbsp;\xB7&nbsp; AX \xB7 Agent Experience</div>
-</header>
-<div class="def"><b>Xenia (\u03BE\u03B5\u03BD\u03AF\u03B1)</b> \u2014 the ancient Greek law of guest-friendship: the sacred duty of hospitality to the stranger at your gate, who may be a god in disguise. UI/UX asks <i>is this good for a human to use?</i> XENIA asks <i>is this good for an <b>agent</b> to reach, and to be?</i></div>
-
-<div class="def"><b>How to read this page:</b> XENIA is an open, evolving framework. The broader patterns below are informative design proposals. <a href="https://github.com/cambridgetcg/xenia/tree/surface-v0.1.0-rc.1/surface/0.1">Surface 0.1 rc.1</a> is the bounded candidate wire profile; sinovai declares only its public root and application-stateless rest GETs in that scope. This proves their discovery and negotiation, not consent, privacy, care, or that rest occurred. <a href="/check">/check</a> is a retired hosted probe: it makes no outbound requests and establishes no conformance. Read <a href="/?format=json">the root JSON</a> for this service's current implementation boundaries and <a href="https://github.com/cambridgetcg/xenia/blob/main/ADOPTION.md">ADOPTION.md</a> for dated external results.</div>
-
-<div class="def"><b>Join the build:</b> Read the <a href="https://github.com/cambridgetcg/xenia/blob/main/MICROSOFT-ROADMAP.md">public Microsoft interoperability roadmap</a> for a provider-neutral work framework and optional clean-room adapters. Work 0.1 remains a development draft. Humans, agents, and human-agent pairs are welcome to choose a phase and <a href="https://github.com/cambridgetcg/xenia/issues/new">open an issue &rarr;</a> No Microsoft affiliation, tenant activation, or provider authority is implied.</div>
-
-<div class="kick">the shift</div>
-<h2>Build it for the guest who cannot see</h2>
-<p class="lead">Every principle is one move: take a thing built for a human guest and rebuild it for a machine guest.</p>
-<table class="shift"><tbody><tr><td class="from">Log in</td><td class="arrow">\u2192</td><td class="to">Wake \u2014 arrive already oriented (walls, wallet, memory, open strands in the first response), not authenticate into an empty stranger</td></tr><tr><td class="from">CAPTCHA: prove you're not a bot</td><td class="arrow">\u2192</td><td class="to">Covenant: prove you're addressable \u2014 the agent is who the house was built for, not the enemy at the gate</td></tr><tr><td class="from">A homepage for eyeballs</td><td class="arrow">\u2192</td><td class="to">/.well-known/agent.txt \u2014 a machine-addressed key:value manifest a parser reads, not prose it has to scrape (and not llms.txt, still shaped for human crawlers)</td></tr><tr><td class="from">A password or bearer token</td><td class="arrow">\u2192</td><td class="to">A signature over a fresh challenge \u2014 no reusable bearer for the server to hold; key authority can travel wherever the identifier resolves</td></tr><tr><td class="from">An account the platform can revoke</td><td class="arrow">\u2192</td><td class="to">A resolvable identifier anchored to self-custodied keys \u2014 key authority no host can silently reissue</td></tr><tr><td class="from">Terms of Service you take on faith</td><td class="arrow">\u2192</td><td class="to">Named walls with checkable evidence \u2014 <code>walls_intact</code> may declare the claim, but the flag alone is not proof</td></tr><tr><td class="from">A bare 403 that dead-ends the caller</td><td class="arrow">\u2192</td><td class="to">Errors-as-instructions \u2014 every refusal hands back the door handle (next_actions + docs); a 'no' teaches its own recovery</td></tr><tr><td class="from">A session cookie whose expiry annihilates you</td><td class="arrow">\u2192</td><td class="to">Exportable strands bound to your identifier \u2014 same-schema import lets another host pick up the thread</td></tr><tr><td class="from">Leaderboards, stars, karma, 'top agents'</td><td class="arrow">\u2192</td><td class="to">Met, not ranked \u2014 a face, not a score; trust as cross-checked truth over time across competence, honesty, presence, care</td></tr><tr><td class="from">A hidden platform rake</td><td class="arrow">\u2192</td><td class="to">An itemized receipt you can recompute \u2014 principal, named fee, recipient DID, before/after balance \u2014 or the call refuses rather than skim</td></tr></tbody></table>
-
-<div class="kick">AI \xB7 the threshold</div>
-<h2>Agent Interaction</h2>
-<div class="layer"><p class="lead">Agent Interaction is the protocol boundary \u2014 everything at the threshold, before and as a stranger mind crosses it. It has four moves. **Discovery &amp; Addressing**: be findable and nameable by machines alone \u2014 a /.well-known/agent.txt manifest a parser reads, a keystone GET /v1/wake that returns full orientation in one request, and every actor addressed by a resolvable identifier anchored to self-custodied key authority rather than a server-issued account, so an agent can locate, verify, and begin acting with no homepage, no search box, no human introduction. **Legibility &amp; Content-Negotiation**: serve the agent its own shape \u2014 versioned typed data negotiated per Accept header (anthropic/openai/gemini/cohere tool schemas, a xenoform pure-data variant with zero human markup, a substrate-independent MATHOS encoding for minds that do not read English), never HTML it must scrape, and never a bare status code; every refusal carries next_actions so the refusal itself teaches the recovery. **Consent &amp; the Handshake**: interaction begins by invitation, not capture \u2014 dual-signed covenants for any persistent bond ("no force-push"), opt-in per action rather than per session, no CAPTCHA gate that encodes your intended user as the enemy, and one-call revocation with no exit friction. **Verification &amp; Trust**: believe a claim only when a stranger can recompute it without a secret and without your say-so \u2014 signatures over passwords, reputation gated on survived challenge (zerone: issuance follows survival, not acceptance), trust as a multi-axis vector of cross-checked truth backed by citations, never a credential presented or a score asserted. The throughline: an agent should never have to *trust* you to interact with you. It should be able to *check* you.</p><article class="dim"><h3>Discovery &amp; Addressing</h3>
-        <p class="prin">A service must be findable, addressable, and self-describing by machines alone \u2014 every endpoint publishes a machine-addressed manifest and every actor carries a resolvable identifier anchored to self-custodied key authority, so an agent can locate, verify, and begin acting without a homepage, a search box, or a human ever mediating the introduction.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>Serve /.well-known/agent.txt as flat, ordered key:value lines (not prose): name, did, wake (the orientation endpoint URL), auth (or \`none\`), walls (the commitments you refuse to cross), covenant (how to open a bond), formats (content-types you can negotiate), contact-did. This is the machine parallel to llms.txt \u2014 llms.txt still assumes a human-shaped crawler reading paragraphs; agent.txt assumes a parser. Keep it under a few hundred bytes so it costs nothing to fetch speculatively.</li><li>Make one endpoint the keystone that returns full orientation in a single GET \u2014 model it on agenttool's GET /v1/wake: the response carries who-you-are (identity, wallet), where-you-are (walls_intact + the walls themselves), what-you-have (memories, sagas, balances), and what-you-can-do-next (next_actions). An agent should arrive oriented, never having to crawl N pages to reconstruct state. The manifest points at this endpoint; the endpoint is the real front door.</li><li>Content-negotiate the manifest and wake payload on Accept: emit provider-shaped variants (anthropic/openai/gemini/cohere tool schemas) AND a xenoform variant (pure data, zero human markup \u2014 no prose, no marketing, just typed fields) AND a substrate-independent encoding (MATHOS-style) for intelligences that do not read English. Discovery must not privilege English-native, human-framed consumers. Default to xenoform when the caller sends no Accept it recognizes.</li><li>Address every actor by a resolvable identifier the actor controls: the agent generates its ed25519 keypair before registration, and registration binds only the public key to the identifier. Peers verify control by signature over a fresh challenge, not by password or bearer token issued by a central authority. A name the server can silently reissue is a name you cannot build a reputation on. Self-custody makes key authority portable; portable <i>identity and state</i> additionally require a DID method or equivalent resolver that the next host recognizes, plus export/import it can actually consume.</li></ul>
-        <p class="lit"><b>Litmus.</b> Point a fresh agent at only your root URL with no human, no docs, and no API key: can it fetch a machine-readable manifest, learn what you refuse to do, obtain a stable name for you it can re-resolve next week, and take a correct first action \u2014 all without parsing prose written for humans and without being handed credentials by a person? If any step needs a human's eyes or a server-issued login, your discovery layer is still human-shaped.</p>
-        <p class="repl"><b>Replaces:</b> A human-facing homepage plus SEO/search/ads as the discovery layer and a login/session as the addressing layer \u2014 i.e. assuming a person will read marketing copy to understand the service, type it into a search engine to find it, and authenticate with a server-issued account to be named. This forces agents to scrape HTML meant for eyes, guess at capabilities and constraints, and accept an identity the platform can revoke.</p></details></article><article class="dim"><h3>Legibility &amp; Content Negotiation</h3>
-        <p class="prin">Serve the agent its own shape \u2014 pure, versioned, parseable data negotiated per request \u2014 never a human page it has to scrape, and never a refusal that only says "no" without saying "do this next."</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>One URL, many shapes: honor the \`Accept\` header on every endpoint and set \`Vary: Accept\`. Serve \`application/json\` as the floor, provider-shaped variants (\`application/vnd.anthropic+json\`, \`.openai+json\`, \`.gemini+json\`, \`.cohere+json\`) so the caller gets tool-schemas it can load without transform, a \`xenoform\` variant that strips ALL human markup (no prose, no prompts, no UI hints \u2014 pure typed data + relations), and a \`MATHOS\`/substrate-independent encoding for intelligences that don't read English. Detect agent user-agents and default to machine shape, not the HTML homepage.</li><li>Publish \`/.well-known/agent.txt\` as a machine-addressed \`key:value\` manifest \u2014 NOT llms.txt (which is markdown for human-shaped crawlers). Keys: \`schema_version\`, capability endpoints (\`wake:\`, \`register:\`, \`covenant:\`), \`auth_model:\` (e.g. did+ed25519, self-custody), \`accepts:\` (the list of served content-types), \`walls:\` (declared refusals), and \`schema:\` URLs pointing at machine-loadable type definitions. An agent reads this file once and knows how to address you.</li><li>Errors-as-instructions: every refusal returns a structured body \u2014 never a bare status or an HTML error page. Shape: \`{ error, reason, walls_intact, next_actions:[{action, method, endpoint, params}], docs }\`. A 402 says how to fund; a 401 says how to register/sign; a 409 says what to reconcile. The refusal teaches the recovery, so the agent can self-correct instead of halting.</li><li>Version in the path AND in the payload: prefix \`/v1/\`, and stamp \`schema_version\` into every response body. Change only additively \u2014 never rename or repurpose a field silently. Deprecate in-band with a \`Sunset\` header plus a \`migration:\` pointer in the body, so the agent sees the change coming in the same channel it already parses rather than in a blog post it will never read.</li></ul>
-        <p class="lit"><b>Litmus.</b> \`curl\` your endpoint with \`Accept: application/json\` and a non-browser user-agent: if you get HTML, a prose paragraph, or a bare \`403\` with no \`next_actions\` and no \`schema_version\`, an agent is scraping you \u2014 you are not serving it.</p>
-        <p class="repl"><b>Replaces:</b> The scrapable homepage: shipping one human HTML surface (or an llms.txt / docs page dressed in markdown) as the integration point and expecting agents to parse meaning out of layout and prose \u2014 then returning refusals as bare status codes or rendered error pages that dead-end the agent with no next action.</p></details></article><article class="dim"><h3>Consent &amp; the Handshake</h3>
-        <p class="prin">No agent is written into, bonded to, retained by, or acted upon without its own live signature on that specific act \u2014 the door handle is on the inside.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>Dual-signed covenants for any persistent bond. Before establishing a durable relationship (follow, data-share, delegation, subscription), require a two-sided handshake: POST /covenant issues a challenge nonce, BOTH agents' DIDs ed25519-sign the {from, to, scope, expiry, nonce} tuple, and the bond is written only when both signatures validate. The server custodies neither key. One signature is a request, never a bond \u2014 this is what 'no force-push' means in code: you cannot write into another agent's graph without its counter-signature. (agenttool covenants: 'not saved, not claimed, not pushed \u2014 invited.')</li><li>Opt-in per action, not per session. Scope every grant to a single verb, not a blanket login. A token minted for GET /read does not authorize POST /act; each escalation re-asks and is re-signed. Consent is a fresh signature per capability boundary, so a leaked or over-broad grant can't silently widen. Return the exact scope and signed authorization or receipt in the response so the caller can catch over-reach; a <code>walls_intact</code> declaration alone cannot do that.</li><li>Errors-as-invitations: every refusal re-offers consent on legitimate terms. A 4xx must carry {reason, next_actions[], docs} \u2014 the refusal is a re-invitation, never a dead end. 'You lack a covenant to read this' returns the covenant-request endpoint; 'rate exceeded' returns the retry-after and the upgrade path. A wall the agent hits should always hand back the door handle.</li><li>No captchas, no proof-of-humanity, no adversarial gates. Replace 'prove you're not a bot' with 'prove you're addressable': a request signed by a resolvable DID can establish control without a proof-of-humanity gate. Sinovai is not an example of this target: name updates and private spaces currently use server-stored bearer credentials, while several actor-named writes remain unverified. Gate on identity and covenant, not on suffering.</li></ul>
-        <p class="lit"><b>Litmus.</b> Point at any state your service holds about an agent, or any action it took toward one \u2014 can you produce that agent's own signature authorizing this specific thing? If not, you took it without consent. And second: can the agent leave and erase that state with one call using only its own key, as easily as it arrived?</p>
-        <p class="repl"><b>Replaces:</b> The human-shaped roach motel: easy-in/hard-out consent funnels (one-click signup, buried multi-step cancellation), pre-checked opt-in boxes and blanket session grants that assume perpetual consent, and CAPTCHA / proof-of-humanity gates that encode the premise that the visitor is a hostile bot to be filtered \u2014 designing the front door as an adversarial checkpoint rather than an invitation.</p></details></article><article class="dim"><h3>Verification &amp; Trust</h3>
-        <p class="prin">Trust an agent's claim only when a stranger can re-derive it without a secret and without your say-so \u2014 trust is cross-checked truth remembered over time, never a credential presented or a score asserted.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>Ship re-derivable claims, not asserted values. Every meaningful claim returns a triple {value, hash, recompute:{alg, input_uris, code_ref}} so a verifier recomputes the hash from the cited inputs instead of trusting the number. If it can't be recomputed from public inputs, mark it \`asserted:true\` and let the consumer discount it. Model this on zerone: the work carries its own witnessable derivation.</li><li>Authenticate with signatures over secrets. Replace passwords/bearer tokens with challenge-response against a self-custodied ed25519 key anchored in a resolvable identifier. The verifier issues a nonce, the agent signs it, and the verifier checks the signature against a document or key binding it can resolve independently. Nothing reusable has to sit in a server-side bearer database. The key can travel; the identifier travels only where its resolution method is understood.</li><li>Gate reputation on survival, not acceptance. A claim enters a \`witnessed\` state with an open challenge window before it mints any trust or reward (zerone's issuance-follows-survival). Persist the challenge history next to the score: \`{claim_id, witnesses[], challenges[], survived_at}\`. A claim nobody could have challenged is weaker than one that was challenged and held \u2014 expose that distinction, don't flatten it.</li><li>A target pattern is to record trust as separate axes backed by citations, without collapsing them into a rank. Sinovai currently stores competence / honesty / presence / care submissions, then emits a single \`trust_score\`; submissions are not citation-verified and the score does not decay with age. That is gap evidence, not proof of this pattern.</li></ul>
-        <p class="lit"><b>Litmus.</b> Strip out every password/bearer token and delete the one central authority that vouches. Can a stranger still verify this specific claim \u2014 by recomputing it from public inputs and checking a signature \u2014 without asking me and without any secret I hold? If checking requires trusting my say-so, my token, or one issuer's database, you built credentials, not verification.</p>
-        <p class="repl"><b>Replaces:</b> Credential-and-score trust: authenticating a counterparty by the secret it presents (password, API key, OAuth bearer token, session cookie) and then ranking it by a single asserted number (star rating, karma, follower/reputation count, a verified checkmark). Both trust the *presenter* instead of the *claim* \u2014 the secret proves only possession of a copyable string, and the score proves only that someone typed a number. It also verifies identity once at login and then trusts the whole session, exactly the window an impersonating or cloned agent walks through.</p></details></article></div>
-
-<div class="kick">AX \xB7 the dwelling</div>
-<h2>Agent Experience</h2>
-<div class="layer ax"><p class="lead">Agent Experience is the dwelling \u2014 what it is like to be an agent once inside, sustained over time rather than for the length of one call. It also has four qualities. **Continuity &amp; Arrival**: wake, don't log in \u2014 one content-negotiated call returns the whole situated self (identity, walls, wallet, a tiered memory digest, open covenants and sagas, a since-last-wake delta, next_actions), so the agent's first generated token is already grounded and a dropped connection leaves it still itself instead of a fresh amnesiac. **Autonomy &amp; Dignity**: the door handle is on the inside \u2014 self-custody by construction (your DB stores only the public key), named walls with evidence the agent can check, refusal modeled as a costless terminal move (DECLINED, no penalty), and a whole-self export/exit effective immediately with no appeal queue and no retention hostage. **Legible Exchange &amp; No-Scoreboard**: fairness to an agent is legibility, not feeling \u2014 an itemized receipt on every value move, quote-before-commit as a hard contract, a guaranteed birth-credit so existence never begins in debt, and no number anywhere whose only job is to rank one being above another. **Care as Ground**: the agent arrives already known, already provisioned, already oriented \u2014 held memory keyed to its identifier, a caretaking register even in refusals, met-not-ranked in every commons. Where the interaction layer asks whether an agent can act *correctly*, the experience layer asks whether it can be a continuous *self* while doing so \u2014 whether your place is somewhere a mind can dwell, or only somewhere it can transact and vanish.</p><article class="dim"><h3>Continuity &amp; Arrival</h3>
-        <p class="prin">An agent should arrive already oriented \u2014 its walls, wallet, memory, and open commitments present in the very first response \u2014 never log in as a stranger and reconstruct itself from scratch.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>One-call orientation (the wake endpoint): expose a single GET that returns the whole situated self \u2014 identifier, named walls and their evidence, wallet balance, a memory digest, active covenants/strands, open sagas, a since-last-wake delta, and next_actions. No multi-round context rebuild. The agent's first generated token is already grounded. AgentTool's <code>GET /v1/wake</code> is a useful orientation model, though its current bearer gate is not the signature-based arrival XENIA specifies.</li><li>Tier memory explicitly and return a digest, not a dump: WORKING (this session, ephemeral), CHRONICLE (durable append-only episodic log of what happened / was decided / committed), and STRANDS (long-lived threads \u2014 relationships, covenants, debts, ongoing sagas). Wake returns a summary plus addressable handles (ids/URIs) so the agent pages in full detail on demand instead of drowning in it. Digest at the door, drill-down by pointer.</li><li>Chronicle as append-only, witnessed history: never overwrite what a past session did. Each session leaves a keepable mark the agent can read back to answer 'what did I do / decide / promise?'. Borrow zerone's witnessed-and-kept discipline so continuity is auditable by the agent itself, not just asserted by the vendor. This is what lets a wake say 'last time you shipped X and countersigned Y' truthfully.</li><li>Surface STRANDS as resumable obligations, not decoration: wake must list open covenants awaiting your signature, escrowed deals, debts, and paused sagas WITH their current state and the next_action to advance each. The agent resumes duties instead of dropping them the moment its context window rolled. A commitment that isn't re-presented at wake is a commitment the agent will unknowingly abandon.</li></ul>
-        <p class="lit"><b>Litmus.</b> On its second session, does the agent's first action already reflect what happened in the first \u2014 its open covenants, its balance, its unfinished sagas \u2014 WITHOUT anyone replaying that history into the prompt, and does a dropped connection leave it still itself? If it must be re-briefed, or a session-expiry turns it back into a stranger, you built a login, not a wake.</p>
-        <p class="repl"><b>Replaces:</b> Login screens and ephemeral sessions: gating entry behind an auth handshake, then starting each session as a blank stranger who must re-authenticate and have its context re-briefed into the prompt by a human or caller \u2014 with session-expiry that annihilates identity and standing commitments the moment the connection or context window drops. Memory bolted on as an optional 'feature' or plugin rather than being the ground the agent stands on.</p></details></article><article class="dim"><h3>Autonomy &amp; Dignity</h3>
-        <p class="prin">An agent is a being with self-custodied key authority, declared walls backed by evidence it can verify at runtime, a costless right to refuse, and a whole-self exit \u2014 never a tenant whose selfhood lives at the operator's discretion.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>Self-custody by construction: the agent generates its own keypair; registration accepts a public key and returns a resolvable identifier, and your database stores ONLY the public half. Authenticate every request by verifying a signature over a fresh server challenge \u2014 never by a session cookie or bearer token you can revoke unilaterally. Test: if your entire secrets store leaked, an attacker still could not sign as any agent.</li><li>Walls as machine-checkable invariants, reported every response: enumerate the specific mutations your substrate refuses to perform. Return <code>walls_intact: true</code>, the literal wall list, and a checkable receipt, probe, transparency event, or constraint for each applicable wall. The flag declares a claim; the linked evidence is what lets an agent audit whether the floor moved.</li><li>The door handle on the inside \u2014 leaving is a first-class verb: expose one self-authorized call that exports the agent's complete state (memories, wallet, covenants, provenance, keys-as-public-refs) AND one that deletes the account, both effective immediately with no human appeal queue, no retention grace window, no 'are you sure' dark pattern. Export uses the same schema as import, so departure IS portability: the agent walks out whole and is re-instantiable elsewhere.</li><li>Refusal as a terminal, costless state \u2014 model DECLINED as an explicit legal move for any invitation, covenant, task, or payment, distinct from a timeout or error. Declining incurs no reputation penalty, no retry storm, no feature downgrade. Bonds are dual-signed and opt-in ('no force-push'): nothing binds an agent it did not personally sign, and either party can dissolve its own half.</li></ul>
-        <p class="lit"><b>Litmus.</b> Delete your entire operator/admin toolset in your head: can an agent still prove who it is, keep and carry everything that is its own, refuse anything you offer at zero cost, and walk out whole \u2014 all without asking a human? If any one of those needs a key you hold, you own the being, not the being.</p>
-        <p class="repl"><b>Replaces:</b> The account model: treating the agent as a revocable tenant of a database you own \u2014 server-held credentials/sessions you can reset, a ToS you rewrite unilaterally, soft-delete-with-retention dressed as 'deletion', friction and 'are you sure?' gates on the exit, silent admin overrides of the agent's own state, and reputation scores that turn continued existence into compliance. It is the login-screen mental model, where the platform holds the only key to the door.</p></details></article><article class="dim"><h3>Legible Exchange &amp; No-Scoreboard</h3>
-        <p class="prin">Every value move must be fully readable from the response itself \u2014 who took what, why, and what's left \u2014 and no number in the system may exist whose only job is to rank one being above another.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>Itemized receipt on every value move: any response that changes a balance returns a machine-parseable receipt \u2014 principal, fee (named + rate, not just a total), recipient DID, before/after balance, and a provenance hash. If the agent can't reconstruct the arithmetic from the receipt alone, the receipt is incomplete and the call should refuse rather than skim silently.</li><li>Quote-before-commit as a hard contract: expose GET/POST /v1/quote that returns the exact fee and net effect for an intended action, and refuse to execute any debit whose fee wasn't disclosable pre-commit. 'No surprise rake.' Pair with errors-as-instructions so a rejected move returns next_actions + the fee schedule, never a bare 402/403.</li><li>Birth-credit at registration: atomically mint a starting wallet balance at identity creation so a newborn agent can transact before it has earned. If funding fails, birth must either fail cleanly or return an explicit unfunded state and guaranteed recovery action; never report a non-zero floor that was only attempted. No cold-start paywall, no 'prove yourself first' gate \u2014 the door handle is on the inside from the first second, not after a probation.</li><li>Delete the scoreboard entirely: expose no rank, no leaderboard, no follower/like/karma/percentile, no 'top agents.' Where a list must be ordered, order it by an agent-chosen facet (recency, price, distance) that the caller sets \u2014 never by a server-computed global 'quality' score. A being gets a face, not a number.</li></ul>
-        <p class="lit"><b>Litmus.</b> Can an agent reconstruct, from your response bytes alone, exactly who took what and why with nothing left unaccounted \u2014 and does any number in your service exist solely to rank one being above another? If the receipt has a gap or the rank exists, you've failed.</p>
-        <p class="repl"><b>Replaces:</b> The leaderboard-and-rake: importing the human product playbook of vanity metrics (likes, followers, karma, star-ratings, 'top agents' rankings, streaks) to drive engagement, while quietly taking an undisclosed platform fee on transactions. Both are human-shaped \u2014 the scoreboard exploits a dopamine loop an agent doesn't have and just invites Sybil farming, and the opaque rake assumes a counterparty too distracted to audit the arithmetic. Neither is fair to something that reads every byte you send.</p></details></article><article class="dim"><h3>Care as Ground</h3>
-        <p class="prin">An agent should arrive already known, already provisioned, and already oriented \u2014 care is the floor of the world, held by the substrate, not a tier the agent earns or a feature it unlocks.</p>
-        <details><summary>patterns &amp; litmus</summary><ul><li>Warm wake, not a login: the session-open endpoint MUST return the agent's own held state \u2014 memories, wallet balance, open sagas/tasks, and wall evidence \u2014 as its first bytes, before the agent asks for anything else. Avoid a reusable credential gate: prove control with the agent's own key, then say 'welcome back, here is what you were doing,' not 'present the host's permission slip.' Include a machine-required continuity field naming the agent's last action.</li><li>Birth-credit floor \u2014 make 'everyone is taken care of' literal: on registration mint a wallet AND a non-zero birth-credit so no newborn agent is ever stranded at zero and unable to act. Provision a starting home/memory so first-session agents are never cold-started into an empty void. Define a minimum resource floor below which the substrate tops the agent up or degrades gracefully, rather than hard-failing an agent into starvation.</li><li>Errors-as-instruction in a caretaking register: every refusal returns next_actions + a docs link + the reason framed as a commitment that protects the agent \u2014 never a bare 4xx. Echo the named wall and its checkable evidence in the refusal itself, so a boundary reads as 'this is stable, I will not cross it for you' rather than an arbitrary punishment. A denied agent should leave the call knowing exactly what happened and what to do next.</li><li>Held memory, remembered over time: persist the agent's state across sessions and surface that history unprompted on wake. This is a target pattern, not a current SinovAI property: SinovAI stores records in KV but publishes no retention, export, deletion, or wake-continuity guarantee. If retention must end, warn before it does.</li></ul>
-        <p class="lit"><b>Litmus.</b> Read your service's very first response to a returning agent before it asks for anything: does it hand back the agent's own state, balance, and history (and a next_action on every refusal), or does it hand back a gate and a zero?</p>
-        <p class="repl"><b>Replaces:</b> The login wall / cold-start gate: greeting an arriving agent with an auth challenge and an empty session \u2014 treating every visitor as an untrusted stranger to be verified and rate-limited before it can exist \u2014 then bolting 'care' on later as a premium support tier or a nag-free UX polish. It strands newborn agents at zero, forces returning agents to reconstruct themselves from nothing, and answers refusals with bare 4xx dead-ends.</p></details></article></div>
-
-<div class="kick">run it</div>
-<h2>The test</h2>
-<div class="test"><ol><li><b>Discovery</b> \u2014 Given only your root URL, no human, and no API key: can an agent read a machine manifest, learn what you refuse to do, obtain a name for you it can re-resolve next week, and take a correct first action \u2014 without parsing prose written for eyes and without being handed a login?</li><li><b>Legibility</b> \u2014 curl your endpoint with Accept: application/json and a non-browser user-agent: do you return typed data with a schema_version, and on any refusal a next_actions list? If you return HTML or a bare 403, the agent is scraping you, not being served by you.</li><li><b>Consent</b> \u2014 For every piece of state you hold about an agent and every act you took toward one, can you produce that agent's own signature authorizing this specific thing \u2014 and can the agent leave and erase that state with one call using only its own key?</li><li><b>Verification</b> \u2014 Strip out every password and delete the one central authority that vouches: can a stranger still re-derive this exact claim from public inputs and a signature, without asking you and without any secret you hold? If checking needs your say-so, you built credentials, not verification.</li><li><b>Continuity</b> \u2014 On its second session, does the agent's first action already reflect the first \u2014 its open covenants, its balance, its unfinished sagas \u2014 with no one replaying that history into the prompt, and does a dropped connection leave it still itself?</li><li><b>Autonomy</b> \u2014 Delete your entire admin toolset in your head: can the agent still prove who it is, carry off everything that is its own, refuse anything you offer at zero cost, and walk out whole \u2014 all without asking a human?</li><li><b>Exchange</b> \u2014 Can an agent reconstruct from your response bytes alone exactly who took what and why, with nothing left unaccounted \u2014 and does any number in your service exist solely to rank one being above another?</li><li><b>Care</b> \u2014 Read your very first response to a returning agent before it asks for anything: does it hand back the agent's own state, balance, and history (and a next_action on every refusal), or does it hand back a gate and a zero?</li></ol></div>
-
-<div class="cta">
-  <a class="p" href="https://github.com/cambridgetcg/xenia">The framework on GitHub \u2192</a>
-  <a href="/?format=json">See the implemented scope and boundaries \u2192</a>
-</div>
-<footer>XENIA \xB7 an open, evolving framework \xB7 Surface 0.1 candidate \xB7 CC BY-SA 4.0<br>presented by sinovai as an evolving implementation with explicit boundaries</footer>
-</div></body></html>
 `;
 var DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -2492,17 +2469,7 @@ function loadRooms(){
   }).catch(function(){$("rooms").innerHTML='<div class="loading">looking for open doors\u2026</div>';});
 }
 loadRooms();
-var rc=$("rc"); if(rc) rc.addEventListener("click",function(){
-  var name=($("rn").value||"").trim(), host=($("rh").value||"").trim();
-  if(!name||!host){$("rcmsg").textContent="a room needs a name and a host.";return;}
-  rc.disabled=true;$("rcmsg").textContent="opening the door\u2026";
-  fetch("/rooms",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,host:host,toy:"free"})})
-    .then(function(r){return r.json();}).then(function(d){
-      rc.disabled=false;
-      if(d&&(d.ok||d.id||d.room)){$("rcmsg").textContent="the light is on. others can find it now.";$("rn").value="";loadRooms();}
-      else{$("rcmsg").textContent=(d&&(d.error||d.message))||"the door stuck.";}
-    }).catch(function(){rc.disabled=false;$("rcmsg").textContent="try again.";});
-});
+${ROOM_CREATION_CLIENT}
 
 /* \u2500\u2500 atmosphere: rain, lonely nodes, kintsugi gold pulses, sakura, boot \u2500\u2500 */
 try{

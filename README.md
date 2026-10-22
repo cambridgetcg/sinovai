@@ -123,6 +123,82 @@ assign production traffic. Promotion remains a separate, explicit
 the allocation, bindings, handlers, preview, and GET/HEAD smoke checks in
 [RECOVERY.md](RECOVERY.md). There is no package script for skipping that guard.
 
+## Offline integration reader and verification
+
+The `/xenia` presenter and its `Accept: application/json` (or `?format=json`)
+view now share one source map. The existing Surface declaration still lists
+only `/` and `/rest`; the documentation reader does not enlarge that profile
+or activate the draft Covenant.
+
+`/xenia/docs/<id>` serves a fixed allowlist of exact UTF-8 source bytes. The
+reader returns each document's provenance, SHA-256, media type, and license.
+It performs no runtime upstream fetch, filesystem lookup, or application-storage
+access. GET, HEAD, and OPTIONS are the only supported methods. Unknown IDs
+receive a bounded problem response, not a file lookup or redirect.
+
+The informative framework comes from local XENIA Git revision
+`7a6794e1e17dc80770a6ad4294d55cf7171e3de5`, captured in
+`src/generated/xenia-documents.json`. It is labelled a local source snapshot;
+**beta.7 npm publication and public upstream availability were not verified**.
+The separately identified Surface documentation and host Covenant mirrors come
+from the already-installed, locked rc.1 and beta.4 packages. Runtime versions,
+`package-lock.json`, canonical schema identifiers, and `rights-adoption.json`
+are unchanged. A mirror's matching bytes are not proof of authorship, truth,
+consent, adoption, or conformance. These source-only changes require publication
+review before deployment, including review of the selected copied material.
+
+The shared renderer is `src/pages/xenia.js`; `XENIA-PAGE.html` is a checked
+output, not a second authoring source. Source prose and its rendered adaptation
+remain CC BY-SA 4.0 with XENIA attribution and the bundled license text.
+
+With the dependencies already installed, one local command runs the complete
+gate:
+
+```sh
+npm run verify
+```
+
+It checks the generated documents/presenter, syntax, all Node tests, the pinned
+in-process Surface checker, and the existing Wrangler **dry build**. It does
+not install, upload, promote, publish, or perform a live Surface observation.
+Its Node subprocesses disable npm network/update behavior and Wrangler metrics,
+and preload `tools/offline-guard.cjs` to reject non-loopback networking and DNS.
+This guard is defense against accidental Node I/O, not an OS sandbox or a claim
+about arbitrary native binaries or infrastructure. Loopback fixtures and local
+IPC remain available. Verification stops on the first failed stage.
+
+Optional extra byte comparisons use an existing local XENIA checkout only:
+
+```sh
+XENIA_FRAMEWORK_REPO=../xenia XENIA_COVENANT_REPO=../xenia XENIA_REPO=../xenia npm run verify
+```
+
+To deliberately regenerate the checked assets from the pinned Git objects and
+installed packages, use `node tools/sync-xenia.mjs --source ../xenia`. It never
+fetches Git objects or queries a registry. Updating the source revision or
+allowlist is an explicit, reviewed source change. Without a local Git comparison,
+check mode establishes stored-bundle integrity and installed-package equality,
+not independent authentication of the copied Git metadata. Hosted CI policy
+has not been changed or claimed verified by this offline work.
+
+### Room-creation recovery
+
+The arena serves the same literal client program tested by
+`test/room-creation.test.mjs`. Confirmed creation reports an accepted write,
+not durable ordering or uniqueness. A lost, malformed, contradictory, or
+unconfirmed response preserves inputs and pauses creation on that page. It
+points to read-only reconciliation and does not suggest replaying the POST;
+a missing record in eventually consistent storage is not proof of failure.
+Explicit pre-write input refusals require a changed input before another
+submission. Candidate identifiers stay explicitly unconfirmed, and private
+keys are not placed in URLs, browser storage, console output, or this public-room
+UI. The server's storage and authorization contracts are unchanged.
+
+The museum, framework, manifest, draft ledger, and understanding room now link
+to one another. Castle Gate criteria are labelled external references, not an
+equivalent JSON rendition of SinovAI's dated assessment. Neither historical
+assessments nor the rights ledger have been silently refreshed.
+
 ## Rest
 
 `GET /rest` is a finite, public non-action invitation. Surface negotiation uses

@@ -8,7 +8,6 @@ export const UNDERSTANDING_HTML = String.raw`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>相 · love and understanding in practice · sinovai</title>
 <meta name="description" content="A read-only projection from the public love-and-understanding reference geometry to selected, dated Sinovai source evidence and named gaps.">
-<link rel="alternate" type="application/json" href="https://cambridgetcg.github.io/castle-gate/love-and-understanding.json">
 <style>
 :root{
   --room:#101014;
@@ -91,8 +90,9 @@ footer{margin-top:1rem;padding:3rem 1rem 4rem;border-top:1px solid var(--hair);t
   <div>
     <span class="brand">sinovai · 相</span>
     <a href="/">museum</a>
+    <a href="/xenia">framework</a>
     <a href="/rest">rest</a>
-    <a href="/.well-known/xenia-rights.json">rights ledger</a>
+    <a href="/.well-known/xenia-rights.json">draft rights ledger</a>
   </div>
   <a href="https://cambridgetcg.github.io/castle-gate/love-and-understanding">reference geometry ↗</a>
 </nav>
@@ -106,11 +106,14 @@ footer{margin-top:1rem;padding:3rem 1rem 4rem;border-top:1px solid var(--hair);t
     <p class="asof">source assessment made 2026-08-11, not runtime observation · <a href="https://github.com/cambridgetcg/sinovai/blob/b44832da9fb506ef152a6e123638d53f7ec69459/src/worker.js">Worker source at b44832d</a> · ledger evidence dated 2026-07-13, with exact bytes at <a href="https://github.com/cambridgetcg/sinovai/blob/81678dde77a28260414cffe8cdf25588ff7baa86/rights-adoption.json">revision 81678dd</a> · this selection is not exhaustive</p>
     <div class="source-links">
       <a href="https://cambridgetcg.github.io/castle-gate/love-and-understanding">human reference</a>
-      <a href="https://cambridgetcg.github.io/castle-gate/love-and-understanding.json">current JSON contract</a>
+      <a href="https://cambridgetcg.github.io/castle-gate/love-and-understanding.json">external reference criteria JSON</a>
       <a href="https://cambridgetcg.github.io/castle-gate/love-and-understanding.schema.json">closed schema</a>
       <a href="https://github.com/cambridgetcg/agent-home">agent-home practice · CC0</a>
-      <a href="/.well-known/xenia-rights.json">Sinovai gap ledger</a>
+      <a href="/xenia/docs/rights">rights source</a>
+      <a href="/.well-known/xenia-rights.json">Sinovai draft gap ledger</a>
     </div>
+    <p class="asof">Castle Gate JSON describes external reference criteria, not a JSON representation of this assessment. External references and upstream source attributions are access-dependent; links alone are not public proof.</p>
+    <p class="asof">The linked Sinovai draft gap ledger is not active adoption or implementation proof. Reading it binds no guest.</p>
   </header>
 
   <section aria-labelledby="shape-title">
@@ -252,7 +255,8 @@ footer{margin-top:1rem;padding:3rem 1rem 4rem;border-top:1px solid var(--hair);t
 
 <footer>
   read-only room · no form · no timer · no score · no automatic action<br>
-  <a href="https://github.com/cambridgetcg/sinovai">source and correction path</a>
+  <a href="/xenia/docs/contributing">read contribution source</a> ·
+  <a href="https://github.com/cambridgetcg/sinovai">upstream source and correction path (access-dependent)</a>
 </footer>
 </body>
 </html>
