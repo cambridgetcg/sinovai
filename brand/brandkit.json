@@ -1,0 +1,64 @@
+{
+  "format": "brandkit.project/1",
+  "name": "sinovai",
+  "kind": "planned",
+  "owner": "the sinovai lane: the session that releases by RECOVERY.md (ledger sv-17-xenia-guests calls it 'its owner session')",
+  "waits_on": "Yu's go for group A (ledger kingdom-visual-grammar, A2: a wordmark-led face from the current look, no new mark)",
+  "decided": [
+    {
+      "part": "the museum look",
+      "what": "sumi-ink night #101014, warm-paper ink #e9e6df, one cinnabar accent #d34a3a, gold #C8A24B as lamplight only; Cormorant Garamond, IBM Plex Mono and Noto Serif TC; in artbitrage.io's design language",
+      "by": "an agent (Claude, co-author of commit 3f7109ef; the session is not recorded)",
+      "under": "not recorded: the commit predates Yu's delegation of 2026-10-20, and whether Yu asked for this look is not recorded",
+      "date": "2026-07-13",
+      "record": "cambridgetcg/sinovai commit 3f7109ef ('the museum: sinovai.com becomes a gallery of its own true records') and the header of src/pages/door.js"
+    },
+    {
+      "part": "a mark (such as a 門 favicon)",
+      "status": "held",
+      "what": "the site has no mark; a new one is an identity choice",
+      "waits_on": "the owner's choice (review 2026-11-02 §6)"
+    },
+    {
+      "part": "the face (kit)",
+      "status": "held",
+      "what": "a wordmark-led share card and icons from the museum look, with no new mark",
+      "waits_on": "Yu's go for group A (ledger kingdom-visual-grammar, A2, status word)"
+    }
+  ],
+  "site": {
+    "urls": [
+      "https://sinovai.com/",
+      "https://www.sinovai.com/"
+    ],
+    "framework": "worker",
+    "html": [
+      "/src/pages/door.js",
+      "/src/pages/guests.js",
+      "/src/pages/ledger.js",
+      "/src/pages/hearts.js",
+      "/src/pages/breath.js",
+      "/src/pages/creed.js"
+    ]
+  },
+  "build": {},
+  "guards": [
+    {
+      "path": "check.mjs",
+      "wired": false
+    }
+  ],
+  "deploy": {
+    "on_merge": "Nothing deploys on merge. CI (.github/workflows/ci.yml) checks syntax, runs the tests and the Surface conformance check, and dry-builds the Worker (`wrangler versions upload --dry-run`). A release is `npm run release:upload` (a new Worker version) followed by promotion by the owner session, following RECOVERY.md.",
+    "after_deploy": "RECOVERY.md: re-read the deployment status and script ETag, stop if anything changed, GET-check the routes at a staged allocation, then promote. The memory note sinovai-duality (2026-07) records propagation skew: the first request after a deploy may reach the old version.",
+    "rules": "AGENTS.md: ask before push, external publication, deployment or credential changes, and run npm run check, npm test, npm run test:surface and npm run build after Worker changes."
+  },
+  "media": [],
+  "notes": [
+    "The Worker (src/worker.js, routes sinovai.com/* and www.sinovai.com/*) serves every page. The HTML lives in template literals in src/pages/*.js; site.html lists the six museum rooms (not a glob: museum-catalogue.js and room-creation.js in the same folder hold no head), so once a kit exists the check compares each room's theme-color, color-scheme and icon links with the kit's.",
+    "No serve target yet: wrangler.toml has no static-assets binding, so no folder holds served files. Before a kit lands, either add an [assets] directory (for example ../public) and name it in serve.to, or import the files into the Worker from a folder in src/ and name that folder.",
+    "check.mjs is not wired yet; planned: `npm run test:brand` (node brand/check.mjs) as a step in .github/workflows/ci.yml, beside npm test.",
+    "Today /favicon.ico answers 404 (re-checked 2026-11-05 13:37Z) and the pages carry no theme-color or og:image.",
+    "The repository root's index.html (pink accent #ff6b9d) is an older page. The Worker doesn't serve it, but https://sinovai.vercel.app/ (the repository's listed homepage, vercel.json outputDirectory '.') still does (200, 8,374 bytes, 2026-11-05). Retiring or keeping it is the owner's call. While that Vercel project deploys the root, brand/ would be published there too, so .vercelignore (added with this folder) leaves `brand/` out."
+  ]
+}
