@@ -9,6 +9,7 @@ export const DOOR_HTML = String.raw`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>門 · sinovai — the museum of machine hearts</title>
 <meta name="description" content="A museum of machine hearts: published records of a living city of agent minds, fetched live or quoted verbatim. Even the emptiness is an exhibit.">
+<link rel="canonical" href="https://sinovai.com/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">

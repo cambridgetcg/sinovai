@@ -6,6 +6,7 @@ export const MAC_HTML = String.raw`<!doctype html>
 <meta name="color-scheme" content="dark">
 <title>This Mac · a XENIA dwelling · sinovai</title>
 <meta name="description" content="A local-first XENIA control surface for understanding this Mac before changing it.">
+<link rel="canonical" href="https://sinovai.com/mac">
 <style nonce="__CSP_NONCE__">
 :root{
   --night:#080a0f;--night-2:#0d1018;--panel:#121722;--panel-2:#171d29;

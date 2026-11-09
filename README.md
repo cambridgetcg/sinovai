@@ -447,9 +447,36 @@ unsigned ratings use the same trust calculation.
   the first 8 entries in each profile list, tokenizes them once, and stops at
   10,000 token-membership checks.
 
+## One canonical host
+
+`https://sinovai.com` is the canonical host. Every HTML page names its own
+apex URL with `<link rel="canonical">`, in the clean form the Worker serves
+(`/arena`, never `/arena/` or `/arena.html`). The `/rest` HTML carries its
+canonical as an HTTP `Link` header instead, because that page's contract keeps
+`<link>` elements and absolute URLs out of its body. Missing pages name no
+canonical.
+
+The workers.dev and preview hosts serve the same bytes, so their copies point
+to the apex too. The workers.dev host is not redirected and stays a working API
+host. `www.sinovai.com` answers `GET` and `HEAD` with a `301` to the same path
+and query on the apex. Other methods on www are still served in place, so no
+write is turned into a `GET`.
+
+`/robots.txt` is plain text that opens every path to every crawler, AI
+crawlers included, and names the sitemap. `/sitemap.xml` lists the museum's
+HTML pages by absolute apex URL. It leaves out guest cards, which change with
+the arena and are linked from the hall, and `/check`, which is a retirement
+notice. Both files are the same bytes for every caller: the Worker does not
+read `User-Agent` for them, or for any canonical or redirect. They read no
+application storage. These are source declarations. They do not establish what
+any search engine or crawler fetches, keeps, or indexes.
+
 ## Endpoints
 
 ```
+GET  /robots.txt          — plain-text crawler policy: all paths open to all
+                            crawlers; names the sitemap
+GET  /sitemap.xml         — absolute apex URLs of the museum's HTML pages
 GET  /.well-known/agent.json
                            — bounded XENIA Surface manifest for root and rest
 GET  /.well-known/xenia-rights.json
