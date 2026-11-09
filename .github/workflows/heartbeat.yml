@@ -5,7 +5,7 @@ on:
     - cron: "0 */4 * * *"
   workflow_dispatch: {}
 
-# Off-switch: disable this workflow in GitHub Actions. The loop performs six
+# Off-switch: disable this workflow in GitHub Actions. The loop performs seven
 # bounded public GET checks, retries each at most twice, issues no mutation
 # request, has no repository write permission, writes only ephemeral runner
 # files, and stops after three minutes.
@@ -49,8 +49,19 @@ jobs:
             https://sinovai.com/rest
           read_live understanding.html -H "Accept: text/html" \
             https://sinovai.com/understanding
-          read_live www.html -H "Accept: text/html" \
-            https://www.sinovai.com/
+          read_live door.html -H "Accept: text/html" \
+            https://sinovai.com/
+
+          # www is a duplicate host: its GET answers with a permanent redirect
+          # to the same path on the apex. The redirect is observed, not followed.
+          www="$(curl --silent --show-error --max-time 20 --retry 2 \
+            --retry-all-errors --output /dev/null \
+            --write-out "%{http_code} %{redirect_url}" \
+            -H "Accept: text/html" https://www.sinovai.com/)"
+          if [[ "$www" != "301 https://sinovai.com/" ]]; then
+            echo "expected www to answer 301 to https://sinovai.com/, received $www" >&2
+            exit 1
+          fi
 
           python3 - <<'PY'
           import json
@@ -61,7 +72,7 @@ jobs:
           rights = json.loads(Path("rights.json").read_text())
           rest = json.loads(Path("rest.json").read_text())
           room = Path("understanding.html").read_text()
-          www = Path("www.html").read_text()
+          door = Path("door.html").read_text()
 
           def require(condition, message):
               if not condition:
@@ -75,11 +86,12 @@ jobs:
           require("GET /understanding" in root["routes"]["understanding"], "root practice-map orientation missing")
           require("A map is not evidence." in room, "practice-map boundary missing")
           require("no badge" in room.lower(), "practice-map badge boundary missing")
-          require("the museum of machine hearts" in www, "www is not the Sinovai museum door")
+          require("the museum of machine hearts" in door, "the apex is not the Sinovai museum door")
 
           print("live truth observed")
           print("surface:", surface["profile"])
           print("rights:", rights["declaration"]["status"], "— no badge")
           print("rest:", rest["schema_version"])
           print("understanding: public read-only practice map")
+          print("www: 301 to the apex door")
           PY
