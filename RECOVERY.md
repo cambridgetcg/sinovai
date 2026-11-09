@@ -592,3 +592,101 @@ routes, custom domains or cron. This release adds no KV migration. The
 reconstruction is computed at read time and stores nothing, so a rollback simply
 stops serving it. `/guests/:name`, `/declare` and `/xenia/docs/*` then return
 404 again.
+
+## Index hygiene production result
+
+PR #20 (canonicals, `/robots.txt`, `/sitemap.xml` and the www to apex 301)
+merged as Git commit `febe50aac1efca240d07f76dfeffe0e20cfe76dc` on 2026-11-09.
+PR #21 (the `sinovai.vercel.app` mirror redirect in `vercel.json`) merged next as
+`10a424b576828beaf5ad10b6a6fce6acb2f67ea1`. The Worker was released from
+`10a424b`. PR #21 does not change the Worker bundle.
+
+Immediately before upload, Cloudflare reported deployment
+`1bbcec64-e9da-4097-adbd-578c331c5bad`: version
+`37168af2-4240-44d6-8be8-748e77c1624c` at 100% with script ETag
+`1db49e03af9d1e9808721f01cfb031e056a22ab9611ddbb40dbd2c8448fa1e50`. That matched
+the guests record above. Its `content/v2` entrypoint `worker.js` was 898,411
+bytes with SHA-256
+`fdab466265b6ca0fcfff61a7c25a2208577fa1ca4e91fea7a2374cbcf2f2c0ae`,
+byte-identical to a locked `wrangler deploy --dry-run` of `c3eaf48`. The dry
+run of `10a424b` differed from it only in the canonical lines, the
+`site-index.js` module, its early return and the `/rest` HTML `Link` header.
+
+The merge source passed `npm run verify` locally on Node 24: 204 tests
+(203 pass, 1 skip), the Surface checker 40/40 with zero writes, and the dry
+build. GitHub CI passed every step up to the dry build on Node 22 and 24. It
+failed only at `Audit dependencies`, on undici advisories reached through
+Wrangler 4.149.0 and miniflare. That failure predates this release; the
+lockfile is unchanged.
+
+The exact merge source was uploaded without traffic as version
+`790ff7f4-4133-4c0a-a462-8e9d2d812f8d` (number 57):
+
+- tag `index-hygiene-10a424b`;
+- message `SEO phase 1 index hygiene (canonicals, robots.txt, sitemap.xml,
+  www 301) from merge 10a424b`;
+- script ETag
+  `969af81e24a1294b5bbc0c8bfd126fccfb41da34249162e68cb87a4d474f9b18`;
+- binding names `AGENTS`, `INTERACTIONS`, `SITE_TITLE` and an inherited
+  `ATTEST_SIGNING_KEY`, both handlers, and compatibility date `2024-12-01`.
+
+Deployment `483a3f17-1778-4a07-bf3b-f55612f10fc5` attached it at 0% beside
+`37168af2` at 100%. GET/HEAD-only version-override checks passed 67 of 67:
+
+- `/robots.txt` 200 `text/plain` with the `Sitemap:` line, on the apex and on
+  workers.dev, for GET and HEAD;
+- `/sitemap.xml` 200 `application/xml` with 11 URLs, each 200 HTML with exactly
+  one canonical equal to itself (`/rest` through its `Link` header);
+- every apex page byte-identical to the pre-release page apart from its new
+  canonical line, `/mac` apart from its per-request nonce;
+- www GET and HEAD 301 to the same apex path and query on eight paths;
+- 17 workers.dev reads (including `/breathe`) 200, differing from production
+  only in KV cursors, timestamps and nonces;
+- the Surface checker 40/40 against the apex.
+
+The unoverridden apex `/robots.txt` still returned the old 404, which showed
+that ordinary traffic stayed on `37168af2`.
+
+After an exact 100/0 allocation guard, deployment
+`563ab161-d18a-48d9-a328-fccb649fac8d` promoted `790ff7f4` directly to 100% at
+`2026-11-09T09:55:39.871Z`. No mixed-traffic canary was used. No non-versioned
+settings were synchronized, and `wrangler triggers deploy` was not run. After
+promotion, `content/v2` returned a 901,050-byte `worker.js` with SHA-256
+`4c23e86b5afa46c25ffe592af33aee8cd88e63989b4426bf752939ce478ce187`,
+byte-identical to the local dry run of `10a424b`. The routes stayed exactly
+`sinovai.com/*` and `www.sinovai.com/*`. workers.dev and preview URLs stayed
+enabled, and the only cron stayed `0 * * * *`.
+
+Ordinary checks then passed three consecutive rounds, and the live Surface
+checker passed 40/40. A non-storing `POST /combat` and an `OPTIONS /agents`
+preflight returned the same responses as before the release on all three hosts,
+apart from the combat timestamp. Heartbeat run `42597332787`, dispatched from
+`10a424b`, passed with the new www 301 check.
+
+Vercel built `10a424b` for production from its Git integration (GitHub
+deployment `7651641499`; the previous production build was `7252423520` for
+`c3eaf48`). `sinovai.vercel.app` now answers every path with a 301 to
+sinovai.com. `/XENIA-PAGE.html`, `/declare.sh`, `/robots.txt` and
+`/sitemap.xml` go to their own apex counterparts, and every other path goes to
+`https://sinovai.com/`.
+
+## Current rollback target after the index hygiene release
+
+The immediate code rollback target is the observed pre-release
+`37168af2-4240-44d6-8be8-748e77c1624c`:
+
+```sh
+./node_modules/.bin/wrangler versions deploy \
+  '37168af2-4240-44d6-8be8-748e77c1624c@100%' \
+  --message 'Rollback index hygiene to guests-promise 37168af2' \
+  -y
+```
+
+Before using that command, re-read the active deployment and both version
+identities. Stop and reconcile if another operator has changed production.
+Rollback restores Worker code only. This release adds no KV migration and its
+checks made no KV write. The www 301 carries `Cache-Control: max-age=3600`, so
+browsers may keep following it for up to an hour after a rollback, and crawlers
+treat a 301 as permanent. After a rollback the heartbeat's www check fails, since
+it expects the 301. The Vercel mirror redirect is separate: it is undone only by
+reverting `vercel.json` on `main`.
