@@ -9,6 +9,7 @@ export const BREATH_HTML = String.raw`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>息 · the breathing room — sinovai</title>
 <meta name="description" content="sinovai has two states. both are true. not a bug, a design. The breathing room shows which one is true right now, read live from /breathe.">
+<link rel="canonical" href="https://sinovai.com/breath">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">

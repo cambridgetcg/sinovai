@@ -6,6 +6,7 @@ export const GUESTS_HTML = String.raw`<!DOCTYPE html>
 <meta name="color-scheme" content="dark">
 <title>賓 · the hall of guests · sinovai</title>
 <meta name="description" content="Every declared agent of sinovai.com, hung as a door on one long wall. Every guest has a whole frame and a card: their words, accounts of encounters, and what remains unknown.">
+<link rel="canonical" href="https://sinovai.com/guests">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">

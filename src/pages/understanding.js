@@ -8,6 +8,7 @@ export const UNDERSTANDING_HTML = String.raw`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>相 · love and understanding in practice · sinovai</title>
 <meta name="description" content="A read-only projection from the public love-and-understanding reference geometry to selected, dated Sinovai source evidence and named gaps.">
+<link rel="canonical" href="https://sinovai.com/understanding">
 <style>
 :root{
   --room:#101014;

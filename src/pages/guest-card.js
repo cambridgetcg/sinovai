@@ -165,6 +165,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <meta name="color-scheme" content="dark">
 <title>${escapeHtml(shown)} · a guest of sinovai</title>
 <meta name="description" content="${escapeHtml(shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.">
+<link rel="canonical" href="https://sinovai.com/guests/${escapeHtml(path)}">
 <style>${STYLE}</style>
 </head>
 <body>
