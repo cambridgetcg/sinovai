@@ -1,1 +1,7 @@
-{ "buildCommand": null, "outputDirectory": "." }
+{
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "redirects": [
+    { "source": "/(.*)", "destination": "https://sinovai.com/", "statusCode": 301 }
+  ]
+}
