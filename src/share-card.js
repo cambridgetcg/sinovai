@@ -14,7 +14,12 @@ export async function createShareCardResponse(request, env) {
   if (method !== "GET" && method !== "HEAD") return null;
   const url = new URL(request.url);
   if (url.hostname !== CARD_HOST || url.pathname !== CARD_PATH || !env.ASSETS) return null;
-  const asset = await env.ASSETS.fetch(new Request(new URL(CARD_PATH, url), { method: "GET" }));
+  let asset;
+  try {
+    asset = await env.ASSETS.fetch(new Request(new URL(CARD_PATH, url), { method: "GET" }));
+  } catch {
+    return null; // the binding failed: answer as without the card (the Worker's 404), not with an error
+  }
   if (asset.status !== 200) return null;
   return new Response(method === "HEAD" ? null : asset.body, {
     headers: {

@@ -218,8 +218,9 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
 /* ── short screens: the enter cue is only a scroll hint (aria-hidden, not a link). It shows where the screen is
    tall enough for it to clear the records line at the headline's widest breath, and nowhere else (heights
    measured per width on 2026-11-10 with the live records line). At 640px and under the rail takes its own
-   space, so the cue would sit below the first screen. ── */
-@media (width <= 640px), (640px < width < 950px) and (height < 840px), (width >= 950px) and (height < 935px){
+   space, so the cue would sit below the first screen. At 949px the link rows reflow and the hero grows, so the
+   taller band starts a few pixels before that. ── */
+@media (width <= 640px), (640px < width < 945px) and (height < 840px), (width >= 945px) and (height < 935px){
   .scrollcue{display:none}
 }
 
