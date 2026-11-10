@@ -82,7 +82,7 @@ section{padding:7rem 1.5rem;border-top:1px solid var(--hair)}
 /* ── the hero: two leaves part, lamplight rises, the museum is behind ── */
 .hero{position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
   overflow:hidden;padding:0 1.5rem}
-.stage{position:relative;width:100%;max-width:62rem;text-align:center;padding:5rem 0}
+.stage{position:relative;width:100%;max-width:62rem;text-align:center;padding:5rem 0 7rem} /* the bottom keeps the enter cue clear of the records line */
 .lamplight{position:absolute;left:50%;top:50%;width:120vw;height:120vh;transform:translate(-50%,-50%);
   z-index:1;opacity:0;
   background:radial-gradient(38% 46% at 50% 50%,rgba(232,198,122,.20),rgba(232,198,122,.06) 42%,transparent 66%);
@@ -201,10 +201,16 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
   font-weight:300;font-size:1.5rem;color:var(--dim);letter-spacing:.4em}
 
 /* ── small screens ── */
+/* where the stage fills the width, the vertical line stands in the right gutter, beside the text, as on wide screens */
+@media (max-width:900px){
+  .kanji-seam{right:-1.7em}          /* one line wide (line-height 1.7): its edge meets the text column's */
+}
 @media (max-width:640px){
   section{padding:4.5rem 1.2rem}
   .leaf{width:40vw}
   .wager-grid{grid-template-columns:1fr}
+  /* the rail wraps to several lines here, so it takes its own space at the top instead of covering the hero */
+  .rail{position:sticky}
   .rail{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:.45rem;padding:12px 16px;
     background:linear-gradient(180deg,rgba(16,16,20,.98),rgba(16,16,20,.9) 78%,rgba(16,16,20,0))}
   .rail .l{gap:8px 12px;min-width:0}
