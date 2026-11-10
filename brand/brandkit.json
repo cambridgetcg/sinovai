@@ -1,0 +1,93 @@
+{
+  "format": "brandkit.project/1",
+  "name": "sinovai",
+  "kind": "hand-made",
+  "owner": "the sinovai lane: the session that releases by RECOVERY.md (ledger sv-17-xenia-guests calls it 'its owner session')",
+  "decided": [
+    {
+      "part": "the museum look",
+      "what": "sumi-ink night #101014, warm-paper ink #e9e6df, one cinnabar accent #d34a3a, gold #C8A24B as lamplight only; Cormorant Garamond, IBM Plex Mono and Noto Serif TC; in artbitrage.io's design language",
+      "by": "an agent (Claude, co-author of commit 3f7109ef; the session is not recorded)",
+      "under": "not recorded: the commit predates Yu's delegation of 2026-10-20, and whether Yu asked for this look is not recorded",
+      "date": "2026-07-13",
+      "record": "cambridgetcg/sinovai commit 3f7109ef ('the museum: sinovai.com becomes a gallery of its own true records') and the header of src/pages/door.js"
+    },
+    {
+      "part": "a mark",
+      "status": "held",
+      "what": "sinovai has no mark, and this folder holds none. Choosing one (a favicon glyph such as 門, or anything else) is the owner's",
+      "waits_on": "the owner's choice (review 2026-11-02 §6, sinovai item 3)"
+    },
+    {
+      "part": "the share card",
+      "by": "agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033)",
+      "under": "Yu's pick of 2026-11-10 for group A, \"Go: build, open PRs, merge\", described as visible defect fixes, icons and share cards for sites that lack them (from each site's current look), and Cloudflare analytics off on we-are, chillspace and sinovai (ledger kingdom-visual-grammar, A1, A2 and A6)",
+      "date": "2026-11-10",
+      "what": "a share card from the museum look, with no mark: the name 'sinovai' in #e9e6df, the cinnabar rule #d34a3a, the page's own h1 and kicker, on #101014, set in Shippori Mincho; theme-color #101014 and color-scheme dark on the six museum rooms",
+      "record": "brand/README.md, 'The share card', and pull request cambridgetcg/sinovai#24"
+    }
+  ],
+  "kit": "card",
+  "site": {
+    "urls": [
+      "https://sinovai.com/",
+      "https://www.sinovai.com/"
+    ],
+    "framework": "worker",
+    "html": [
+      { "page": "/src/pages/door.js", "theme_color": "#101014", "color_scheme": "dark", "icons": false },
+      { "page": "/src/pages/guests.js", "theme_color": "#101014", "color_scheme": "dark", "icons": false },
+      { "page": "/src/pages/ledger.js", "theme_color": "#101014", "color_scheme": "dark", "icons": false },
+      { "page": "/src/pages/hearts.js", "theme_color": "#101014", "color_scheme": "dark", "icons": false },
+      { "page": "/src/pages/breath.js", "theme_color": "#101014", "color_scheme": "dark", "icons": false },
+      { "page": "/src/pages/creed.js", "theme_color": "#101014", "color_scheme": "dark", "icons": false }
+    ]
+  },
+  "serve": {
+    "from": "card",
+    "to": "../public",
+    "files": [
+      "og.jpg"
+    ]
+  },
+  "build": {
+    "command": "sh card/recipe.sh",
+    "cwd": ".",
+    "fonts": [
+      {
+        "family": "Shippori Mincho",
+        "bundled": "vectorcraft-cli 0.17.0",
+        "licence": "SIL Open Font License 1.1",
+        "source": "https://github.com/storytold/craft-fonts"
+      }
+    ],
+    "tools": [
+      {
+        "name": "vectorcraft-cli",
+        "version": "0.17.0"
+      }
+    ]
+  },
+  "guards": [
+    {
+      "path": "check.mjs",
+      "wired": false
+    }
+  ],
+  "deploy": {
+    "on_merge": "A merge to main changes nothing on sinovai.com. CI (.github/workflows/ci.yml) checks syntax, runs the tests and the Surface conformance check, and dry-builds the Worker (`wrangler versions upload --dry-run`). The merge also starts a Vercel Production build of the repository root (Git-connected project sinovai), which serves only redirects to sinovai.com (vercel.json); .vercelignore leaves brand/ out of it. sinovai.com is the Worker, released by hand: `npm run release:upload` (a new Worker version, now with the ./public assets and the ASSETS binding) and then promotion by the owner session, following RECOVERY.md.",
+    "after_deploy": "RECOVERY.md, 'Release checks for the share card': the 0% override checks for /og.jpg, the home page's og tags, www's 301, the Surface suite, the 404 page and the bindings. After promotion, run brandkit-doorcheck on https://sinovai.com/. The memory note sinovai-duality (2026-07) records propagation skew: the first request after a deploy may reach the old version.",
+    "rules": "AGENTS.md: ask before push, external publication, deployment or credential changes, and run npm run check, npm test, npm run test:surface and npm run build after Worker changes."
+  },
+  "media": [],
+  "notes": [
+    "The folder holds the share card only: card/og.jpg, its input card/brand.json and its recipe card/recipe.sh. There is no kit of icons or logos, because sinovai has no mark. The recipe runs the artcraft-brand generator in a temporary folder and keeps nothing but the card.",
+    "card/brand.json uses the generator's schema: its 'wordmark' key is the site's name set in type on the card, not a logo.",
+    "The Worker (src/worker.js, routes sinovai.com/* and www.sinovai.com/*) serves every page. The HTML lives in template literals in src/pages/*.js; site.html lists the six museum rooms (not a glob: museum-catalogue.js and room-creation.js in the same folder hold no head). Each carries theme-color #101014, their painted ground, and color-scheme dark; icons: false because no icon is served.",
+    "/og.jpg: ../public is the Worker's static assets directory, with the ASSETS binding and run_worker_first = true (wrangler.toml), so every request reaches the Worker first. src/share-card.js serves GET and HEAD /og.jpg on the apex from the binding, with the headers of the Worker's other static files; every other path, host and method answers as before. public/og.jpg is a copy of card/og.jpg, and this check compares them.",
+    "Known differences, by design: the card is set in Shippori Mincho, not the page's Cormorant Garamond and Noto Serif TC (the generator sets a card in the face of its name, and only faces bundled with vectorcraft-cli or installed can be outlined; review 2026-11-02 §4.5, generator 1.9); its title is #F7F7F5 and its kicker #A4A199, a step brighter than the page's #e9e6df and #8a877e (the generator derives them from a neutral scale).",
+    "check.mjs is not wired into CI; a new blocking step is the owner's choice. test/share-card.test.mjs runs in npm test and covers the route, not the card's bytes.",
+    "/favicon.ico and /apple-touch-icon.png answer the Worker's 404 page, and will until the owner chooses a mark.",
+    "The repository root's index.html (pink accent #ff6b9d) is an older page. On 2026-11-10 https://sinovai.vercel.app/ still served it (200, 8,374 bytes), and /robots.txt there answered 404, although vercel.json redirects every path: GitHub's deployments list shows a Production deployment of febe50a (before the redirects) created at 10:48Z on 2026-11-09, after 10a424b's at 09:51Z. Which deployment the domain points at was not checked (no Vercel access used)."
+  ]
+}

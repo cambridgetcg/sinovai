@@ -30,6 +30,7 @@ import { DECLARE_SH } from "./declare-script.js";
 import { createXeniaResponse } from "./xenia-response.js";
 import { ROOM_CREATION_CLIENT } from "./pages/room-creation.js";
 import { CANONICAL_ORIGIN, createSiteIndexResponse } from "./site-index.js";
+import { createShareCardResponse } from "./share-card.js";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1059,6 +1060,8 @@ async function handleRequest(request, env) {
   // First, so www's GET and HEAD reach the apex before any route answers.
   const siteIndexResponse = createSiteIndexResponse(request);
   if (siteIndexResponse) return siteIndexResponse;
+  const shareCardResponse = await createShareCardResponse(request, env);
+  if (shareCardResponse) return shareCardResponse;
   const xeniaResponse = createXeniaResponse(request);
   if (xeniaResponse) return xeniaResponse;
   if (method === "OPTIONS" && path === "/mac") {

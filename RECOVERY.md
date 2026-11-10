@@ -67,6 +67,97 @@ in Git and must never be written here. Every uploaded version must be checked
 with `wrangler versions view <version> --json` to confirm the binding was
 inherited.
 
+## Release checks for the share card (pending, PR #24)
+
+Written 2026-11-10 by an agent (Claude Code, Opus 5.5, child of session
+5c4df033) with PR #24; nothing here has been released yet. That release adds
+static assets to the Worker for the first time:
+
+- `wrangler.toml` `[assets]`: directory `./public` (only `og.jpg`), binding
+  `ASSETS`, `run_worker_first = true`;
+- `src/share-card.js`: GET and HEAD `/og.jpg` on the apex answer the card from
+  `ASSETS`;
+- head tags and CSS in `src/pages/*.js`.
+
+It changes no KV data, route, custom domain or cron.
+
+Keep the usual guard (re-read the deployment and script ETag first, upload
+without traffic, GET/HEAD-only checks). Then run these checks from the
+repository root, with the new version at 0% in the current deployment.
+
+The override header is the form in Cloudflare's "Version overrides" page (read
+2026-11-10): `Cloudflare-Workers-Version-Overrides` is a structured-header
+dictionary, `<worker name>="<version id>"`. It applies only when that version
+is in the current deployment; otherwise the request follows the percentages.
+
+```sh
+V=<new-version-id>                  # printed by npm run release:upload
+O="Cloudflare-Workers-Version-Overrides: sinovai=\"$V\""
+```
+
+1. Bindings. Expect `AGENTS`, `INTERACTIONS`, `SITE_TITLE` and the inherited
+   `ATTEST_SIGNING_KEY`, as before, plus one new one, the assets binding
+   `ASSETS`. The dry run (`npm run build`) lists the same names apart from the
+   secret.
+   ```sh
+   ./node_modules/.bin/wrangler versions view "$V" --json | grep -o -E '"(AGENTS|INTERACTIONS|SITE_TITLE|ATTEST_SIGNING_KEY|ASSETS)"' | sort -u
+   ```
+2. The card, with the override and without it.
+   ```sh
+   curl -sS -H "$O" -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' https://sinovai.com/og.jpg
+   #   expect: 200 image/jpeg 56609
+   curl -sS -H "$O" https://sinovai.com/og.jpg | shasum -a 256
+   #   expect: 37ab080cd32aa0f26306ae979ee32ad0c0977a143c5a5bfaa3d3370911644101 (= brand/card/og.jpg)
+   curl -sS -I -H "$O" https://sinovai.com/og.jpg
+   #   expect: 200, Content-Type: image/jpeg, Cache-Control: no-cache,
+   #   Access-Control-Allow-Origin: *, X-Content-Type-Options: nosniff
+   curl -sS -o /dev/null -w '%{http_code}\n' https://sinovai.com/og.jpg
+   #   expect: 404 (the current version, without the override)
+   ```
+3. The home page's head, with the override.
+   ```sh
+   curl -sS -H "$O" -H 'Accept: text/html' https://sinovai.com/ | grep -c -E 'property="og:image" content="https://sinovai.com/og.jpg"|property="og:image:alt"|property="og:title"|name="twitter:card" content="summary_large_image"|name="theme-color" content="#101014"'
+   #   expect: 5
+   ```
+4. www, with the override.
+   ```sh
+   curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' -H "$O" https://www.sinovai.com/og.jpg
+   #   expect: 301 https://sinovai.com/og.jpg
+   curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' -H "$O" https://www.sinovai.com/
+   #   expect: 301 https://sinovai.com/
+   ```
+5. The complete Surface checker, with the override. The checker's CLI takes no
+   header, so this wraps its fetch. It makes GET requests only.
+   ```sh
+   V="$V" node --input-type=module -e '
+   import { checkSurface } from "@agenttool/xenia-surface";
+   const override = `sinovai="${process.env.V}"`;
+   const fetchImpl = (url, init = {}) =>
+     fetch(url, { ...init, headers: { ...init.headers, "Cloudflare-Workers-Version-Overrides": override } });
+   const r = await checkSurface("https://sinovai.com", { fetchImpl });
+   console.log(r.result, JSON.stringify(r.counts));
+   process.exitCode = r.result === "conformant" ? 0 : 1;'
+   #   expect: conformant {"pass":40,"fail":0,"unknown":0,"not_run":0}
+   ```
+6. The 404 page, with the override.
+   ```sh
+   curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -H "$O" -H 'Accept: text/html' https://sinovai.com/no-such-door
+   #   expect: 404 text/html; charset=utf-8
+   ```
+
+One part of this was not testable locally: whether the version-override header
+reaches static assets. `wrangler dev` has no version overrides. With
+`run_worker_first`, the overridden Worker reads the card through its own
+`ASSETS` binding, so the card should come from the overridden version, but
+that has not been observed. If check 2 does not pass under the override, stop:
+do not promote.
+
+After promotion, repeat checks 2 to 6 without `-H "$O"` (and with
+`fetchImpl` left out of check 5); every line of check 2 then expects the card's
+200. Then run
+`brandkit-doorcheck` on `https://sinovai.com/`. A rollback to the previous
+version also removes the card: its assets belong to the version.
+
 ## Surface rc.1 production result
 
 The Surface release was promoted on 2026-07-11 from merged Git commit

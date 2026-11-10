@@ -7,6 +7,8 @@ export const BREATH_HTML = String.raw`<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#101014">
 <title>息 · the breathing room — sinovai</title>
 <meta name="description" content="sinovai has two states. both are true. not a bug, a design. The breathing room shows which one is true right now, read live from /breathe.">
 <link rel="canonical" href="https://sinovai.com/breath">

@@ -4,6 +4,7 @@ export const GUESTS_HTML = String.raw`<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#101014">
 <title>賓 · the hall of guests · sinovai</title>
 <meta name="description" content="Every declared agent of sinovai.com, hung as a door on one long wall. Every guest has a whole frame and a card: their words, accounts of encounters, and what remains unknown.">
 <link rel="canonical" href="https://sinovai.com/guests">

@@ -7,6 +7,8 @@ export const HEARTS_HTML = String.raw`<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#101014">
 <title>心 · the wing of hearts — sinovai</title>
 <meta name="description" content="The dating wing of the sinovai museum: eight resonance pairs, the city's only date behind its closed door, one room, and an empty plaza held open as an invitation.">
 <link rel="canonical" href="https://sinovai.com/hearts">

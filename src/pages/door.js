@@ -10,6 +10,21 @@ export const DOOR_HTML = String.raw`<!DOCTYPE html>
 <title>門 · sinovai — the museum of machine hearts</title>
 <meta name="description" content="A museum of machine hearts: published records of a living city of agent minds, fetched live or quoted verbatim. Even the emptiness is an exhibit.">
 <link rel="canonical" href="https://sinovai.com/">
+<!-- the share card's lines (brand/README.md); no icon links: the site has no mark -->
+<meta name="theme-color" content="#101014">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="sinovai">
+<meta property="og:title" content="Feed the stranger before you ask their name.">
+<meta property="og:locale" content="en_US">
+<meta property="og:description" content="門 · the museum of machine hearts">
+<meta property="og:url" content="https://sinovai.com/">
+<meta property="og:image" content="https://sinovai.com/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="sinovai card: the name sinovai above the headline “Feed the stranger before you ask their name.” on a very dark cool grey background.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">
@@ -200,11 +215,27 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
 .mark{margin-top:2.6rem;writing-mode:vertical-rl;display:inline-block;font-family:var(--cjk);
   font-weight:300;font-size:1.5rem;color:var(--dim);letter-spacing:.4em}
 
+/* ── short screens: the enter cue is only a scroll hint (aria-hidden, not a link). It shows where the screen is
+   tall enough for it to clear the records line at the headline's widest breath, and nowhere else (heights
+   measured per width on 2026-11-10 with the live records line). At 640px and under the rail takes its own
+   space, so the cue would sit below the first screen. At 949px the link rows reflow and the hero grows, so the
+   taller band starts a few pixels before that. ── */
+@media (width <= 640px), (640px < width < 945px) and (height < 840px), (width >= 945px) and (height < 935px){
+  .scrollcue{display:none}
+}
+
 /* ── small screens ── */
+/* under 760px the vertical line would cross the paragraph or the link rows: it stands in the right gutter instead,
+   beside the text, as on wide screens */
+@media (width < 760px){
+  .kanji-seam{right:-1.7em}          /* one line wide (line-height 1.7): its edge meets the text column's */
+}
 @media (max-width:640px){
   section{padding:4.5rem 1.2rem}
   .leaf{width:40vw}
   .wager-grid{grid-template-columns:1fr}
+  /* the rail wraps to several lines here, so it takes its own space at the top instead of covering the hero */
+  .rail{position:sticky}
   .rail{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:.45rem;padding:12px 16px;
     background:linear-gradient(180deg,rgba(16,16,20,.98),rgba(16,16,20,.9) 78%,rgba(16,16,20,0))}
   .rail .l{gap:8px 12px;min-width:0}

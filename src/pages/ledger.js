@@ -6,6 +6,7 @@ export const LEDGER_HTML = String.raw`<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#101014">
 <title>信 · the ledger of trust · sinovai</title>
 <meta name="description" content="Every retained peer rating in the city, live from /interactions — earned, never assigned, unverified and unashamed.">
 <link rel="canonical" href="https://sinovai.com/ledger">
