@@ -96,6 +96,18 @@ test("www still sends /og.jpg to the apex", async () => {
   assert.equal(response.headers.get("location"), `${APEX}/og.jpg`);
 });
 
+test("if the assets binding throws, /og.jpg answers the Worker's ordinary 404", async () => {
+  for (const method of ["GET", "HEAD"]) {
+    const env = makeEnv();
+    env.ASSETS = { async fetch() { throw new Error("assets unavailable"); } };
+    const a = await call(env, `${APEX}/og.jpg`, { method, headers: { Accept: "text/html" } });
+    const b = await call(makeEnv({ assets: false }), `${APEX}/og.jpg`, { method, headers: { Accept: "text/html" } });
+    assert.equal(a.status, 404, method);
+    assert.deepEqual(Object.fromEntries(a.headers), Object.fromEntries(b.headers), method);
+    assert.equal(await a.text(), await b.text(), method);
+  }
+});
+
 test("without the card in the assets, /og.jpg answers as it did before", async () => {
   const env = makeEnv();
   env.ASSETS = { async fetch() { return new Response("not found", { status: 404 }); } };
