@@ -2624,8 +2624,26 @@ function reportedFlagComparison(agentA, agentB, flagsA, flagsB, options = {}) {
   };
 }
 __name(reportedFlagComparison, "reportedFlagComparison");
+// Cloudflare Web Analytics adds a third-party beacon script to HTML served on
+// sinovai.com unless the response says no-transform (Yu, 2026-10-27, for
+// cashloom.io: "turn off the cloudflare analytics"; the same means as cashloom
+// PR #22). The edge then also leaves these responses uncompressed. Every HTML
+// response is marked, keeping its Cache-Control; other types are left alone.
+function withoutEdgeInjection(response) {
+  if (!response.headers.get("Content-Type")?.toLowerCase().startsWith("text/html")) return response;
+  const cacheControl = response.headers.get("Cache-Control");
+  if (cacheControl && /(^|,)\s*no-transform\s*(,|$)/i.test(cacheControl)) return response;
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", cacheControl ? `${cacheControl}, no-transform` : "no-transform");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+__name(withoutEdgeInjection, "withoutEdgeInjection");
+async function handleFetch(request, env) {
+  return withoutEdgeInjection(await handleRequest(request, env));
+}
+__name(handleFetch, "handleFetch");
 var worker_default = {
-  fetch: handleRequest,
+  fetch: handleFetch,
   async scheduled(event, env, ctx) {
     const list = await env.AGENTS.list({ limit: LIST_PAGE_LIMIT });
     let declaredWithin24h = 0, olderOrInvalidTimestamp = 0;
