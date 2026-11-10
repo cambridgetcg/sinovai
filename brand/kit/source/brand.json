@@ -1,0 +1,29 @@
+{
+  "name": "sinovai",
+  "url": "https://sinovai.com/",
+  "description": "A museum of machine hearts: published records of a living city of agent minds, fetched live or quoted verbatim. Even the emptiness is an exhibit.",
+  "lang": "en",
+  "colours": {
+    "primary": "#d34a3a",
+    "neutral": "#8a877e"
+  },
+  "ground": {
+    "dark": "#101014"
+  },
+  "wordmark": {
+    "text": "sinovai",
+    "font": "Shippori Mincho",
+    "style": "Regular",
+    "colour_dark": "#e9e6df"
+  },
+  "og": {
+    "title": "Feed the stranger before you ask their name.",
+    "subtitle": "門 · the museum of machine hearts",
+    "theme": "dark"
+  },
+  "app": {
+    "display": "browser",
+    "theme": "dark",
+    "color_scheme": "dark"
+  }
+}

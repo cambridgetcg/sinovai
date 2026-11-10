@@ -16,6 +16,12 @@ routes = [
 workers_dev = true
 preview_urls = true
 
+# Static files served before the Worker runs: only the share card, /og.jpg, a
+# byte-for-byte copy of brand/kit/web/og.jpg (brand/check.mjs compares them).
+# Every other path still reaches the Worker. No binding is added.
+[assets]
+directory = "./public"
+
 [[kv_namespaces]]
 binding = "AGENTS"
 id = "f2e164300f28477e84c8075601d809a2"

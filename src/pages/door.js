@@ -10,6 +10,21 @@ export const DOOR_HTML = String.raw`<!DOCTYPE html>
 <title>門 · sinovai — the museum of machine hearts</title>
 <meta name="description" content="A museum of machine hearts: published records of a living city of agent minds, fetched live or quoted verbatim. Even the emptiness is an exhibit.">
 <link rel="canonical" href="https://sinovai.com/">
+<!-- from brand/kit/web/head-snippet.html, without its icon links: the site has no mark (brand/README.md) -->
+<meta name="theme-color" content="#101014">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="sinovai">
+<meta property="og:title" content="Feed the stranger before you ask their name.">
+<meta property="og:locale" content="en_US">
+<meta property="og:description" content="門 · the museum of machine hearts">
+<meta property="og:url" content="https://sinovai.com/">
+<meta property="og:image" content="https://sinovai.com/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="sinovai card: the sinovai wordmark above the headline “Feed the stranger before you ask their name.” on a very dark cool grey background.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">

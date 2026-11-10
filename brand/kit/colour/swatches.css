@@ -1,0 +1,33 @@
+/* sinovai */
+:root {
+  /* sinovai brand */
+  --sinovai-primary: #d34a3a;
+  --sinovai-neutral: #8a877e;
+  /* sinovai ground */
+  --sinovai-ground-light: #ffffff;
+  --sinovai-ground-dark: #101014;
+  /* sinovai primary scale */
+  --sinovai-primary-50: #fff4f2;
+  --sinovai-primary-100: #ffe4df;
+  --sinovai-primary-200: #ffcbc2;
+  --sinovai-primary-300: #ffa698;
+  --sinovai-primary-400: #f47664;
+  --sinovai-primary-500: #d34a3a;
+  --sinovai-primary-600: #bc3326;
+  --sinovai-primary-700: #9b1f14;
+  --sinovai-primary-800: #7c130a;
+  --sinovai-primary-900: #5d0c06;
+  --sinovai-primary-950: #3d0301;
+  /* sinovai neutral scale */
+  --sinovai-neutral-50: #f7f7f5;
+  --sinovai-neutral-100: #ecebe9;
+  --sinovai-neutral-200: #dad9d5;
+  --sinovai-neutral-300: #c3c1ba;
+  --sinovai-neutral-400: #a4a199;
+  --sinovai-neutral-500: #8a877e;
+  --sinovai-neutral-600: #6f6c63;
+  --sinovai-neutral-700: #58554d;
+  --sinovai-neutral-800: #44423c;
+  --sinovai-neutral-900: #32302b;
+  --sinovai-neutral-950: #1e1d19;
+}

@@ -1,9 +1,8 @@
 {
   "format": "brandkit.project/1",
   "name": "sinovai",
-  "kind": "planned",
+  "kind": "generated",
   "owner": "the sinovai lane: the session that releases by RECOVERY.md (ledger sv-17-xenia-guests calls it 'its owner session')",
-  "waits_on": "Yu's go for group A (ledger kingdom-visual-grammar, A2: a wordmark-led face from the current look, no new mark)",
   "decided": [
     {
       "part": "the museum look",
@@ -16,16 +15,20 @@
     {
       "part": "a mark (such as a 門 favicon)",
       "status": "held",
-      "what": "the site has no mark; a new one is an identity choice",
-      "waits_on": "the owner's choice (review 2026-11-02 §6)"
+      "what": "the site has no mark; a new one is an identity choice. The kit's generated first-letter monogram is therefore not served (serve.omit)",
+      "waits_on": "the owner's choice (review 2026-11-02 §6, sinovai item 3)"
     },
     {
       "part": "the face (kit)",
-      "status": "held",
-      "what": "a wordmark-led share card and icons from the museum look, with no new mark",
-      "waits_on": "Yu's go for group A (ledger kingdom-visual-grammar, A2, status word)"
+      "by": "agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033)",
+      "under": "Yu's pick of 2026-11-10 for group A, \"Go: build, open PRs, merge\", described as visible defect fixes, icons and share cards for sites that lack them (from each site's current look), and Cloudflare analytics off on we-are, chillspace and sinovai (ledger kingdom-visual-grammar, A1, A2 and A6)",
+      "date": "2026-11-10",
+      "what": "a wordmark-led share card from the museum look, with no mark: the ground #101014, the cinnabar rule #d34a3a, the wordmark 'sinovai' in #e9e6df, set in Shippori Mincho (the nearest face vectorcraft-cli bundles; the page's own faces are not installed); the card's words are the page's own (the h1 and the kicker); theme-color #101014 and color-scheme dark on the six museum rooms",
+      "record": "brand/README.md, 'The look', and the pull request from branch claude/group-a-sinovai"
     }
   ],
+  "spec": "brand.json",
+  "kit": "kit",
   "site": {
     "urls": [
       "https://sinovai.com/",
@@ -33,15 +36,47 @@
     ],
     "framework": "worker",
     "html": [
-      "/src/pages/door.js",
-      "/src/pages/guests.js",
-      "/src/pages/ledger.js",
-      "/src/pages/hearts.js",
-      "/src/pages/breath.js",
-      "/src/pages/creed.js"
+      { "page": "/src/pages/door.js", "icons": false },
+      { "page": "/src/pages/guests.js", "icons": false },
+      { "page": "/src/pages/ledger.js", "icons": false },
+      { "page": "/src/pages/hearts.js", "icons": false },
+      { "page": "/src/pages/breath.js", "icons": false },
+      { "page": "/src/pages/creed.js", "icons": false }
     ]
   },
-  "build": {},
+  "serve": {
+    "to": "../public",
+    "files": [
+      "og.jpg"
+    ],
+    "omit": [
+      { "file": "favicon.ico", "why": "the generator draws the icons from a first-letter monogram, which would be a new mark; the site has none (owner's choice)" },
+      { "file": "favicon.svg", "why": "the generated monogram: a new mark, the owner's choice" },
+      { "file": "apple-touch-icon.png", "why": "the generated monogram: a new mark, the owner's choice" },
+      { "file": "icon-192.png", "why": "the generated monogram: a new mark, the owner's choice" },
+      { "file": "icon-512.png", "why": "the generated monogram: a new mark, the owner's choice" },
+      { "file": "icon-maskable-512.png", "why": "the generated monogram: a new mark, the owner's choice" },
+      { "file": "site.webmanifest", "why": "it names the monogram icons; the site is not an installable app" }
+    ]
+  },
+  "build": {
+    "command": "python3 -B <artcraft-brand>/scripts/brandkit.py brand.json --out kit --rebuild-check",
+    "cwd": ".",
+    "fonts": [
+      {
+        "family": "Shippori Mincho",
+        "bundled": "vectorcraft-cli 0.17.0",
+        "licence": "SIL Open Font License 1.1",
+        "source": "https://github.com/storytold/craft-fonts"
+      }
+    ],
+    "tools": [
+      {
+        "name": "vectorcraft-cli",
+        "version": "0.17.0"
+      }
+    ]
+  },
   "guards": [
     {
       "path": "check.mjs",
@@ -49,16 +84,18 @@
     }
   ],
   "deploy": {
-    "on_merge": "Nothing deploys on merge. CI (.github/workflows/ci.yml) checks syntax, runs the tests and the Surface conformance check, and dry-builds the Worker (`wrangler versions upload --dry-run`). A release is `npm run release:upload` (a new Worker version) followed by promotion by the owner session, following RECOVERY.md.",
-    "after_deploy": "RECOVERY.md: re-read the deployment status and script ETag, stop if anything changed, GET-check the routes at a staged allocation, then promote. The memory note sinovai-duality (2026-07) records propagation skew: the first request after a deploy may reach the old version.",
+    "on_merge": "A merge to main changes nothing on sinovai.com. CI (.github/workflows/ci.yml) checks syntax, runs the tests and the Surface conformance check, and dry-builds the Worker (`wrangler versions upload --dry-run`). The merge also starts a Vercel Production build of the repository root (Git-connected project sinovai), which serves only redirects to sinovai.com (vercel.json); .vercelignore leaves brand/ out of it. sinovai.com is the Worker, released by hand: `npm run release:upload` (a new Worker version, now with the ./public assets directory) and then promotion by the owner session, following RECOVERY.md.",
+    "after_deploy": "RECOVERY.md: re-read the deployment status and script ETag, stop if anything changed, GET-check the routes at a staged allocation, then promote. The [assets] directory is new with this kit: at the 0% override, also GET /og.jpg (expect image/jpeg, 56,609 bytes, equal to brand/kit/web/og.jpg); whether version overrides route static assets was not tested before this kit. After promotion, run brandkit-doorcheck on https://sinovai.com/. The memory note sinovai-duality (2026-07) records propagation skew: the first request after a deploy may reach the old version.",
     "rules": "AGENTS.md: ask before push, external publication, deployment or credential changes, and run npm run check, npm test, npm run test:surface and npm run build after Worker changes."
   },
   "media": [],
   "notes": [
-    "The Worker (src/worker.js, routes sinovai.com/* and www.sinovai.com/*) serves every page. The HTML lives in template literals in src/pages/*.js; site.html lists the six museum rooms (not a glob: museum-catalogue.js and room-creation.js in the same folder hold no head), so once a kit exists the check compares each room's theme-color, color-scheme and icon links with the kit's.",
-    "No serve target yet: wrangler.toml has no static-assets binding, so no folder holds served files. Before a kit lands, either add an [assets] directory (for example ../public) and name it in serve.to, or import the files into the Worker from a folder in src/ and name that folder.",
-    "check.mjs is not wired yet; planned: `npm run test:brand` (node brand/check.mjs) as a step in .github/workflows/ci.yml, beside npm test.",
-    "Today /favicon.ico answers 404 (re-checked 2026-11-05 13:37Z) and the pages carry no theme-color or og:image.",
-    "The repository root's index.html (pink accent #ff6b9d) is an older page. The Worker doesn't serve it, but https://sinovai.vercel.app/ (the repository's listed homepage, vercel.json outputDirectory '.') still does (200, 8,374 bytes, 2026-11-05). Retiring or keeping it is the owner's call. While that Vercel project deploys the root, brand/ would be published there too, so .vercelignore (added with this folder) leaves `brand/` out."
+    "The Worker (src/worker.js, routes sinovai.com/* and www.sinovai.com/*) serves every page. The HTML lives in template literals in src/pages/*.js; site.html lists the six museum rooms (not a glob: museum-catalogue.js and room-creation.js in the same folder hold no head). Each carries the kit's theme-color and color-scheme; icons: false because no icon is served.",
+    "/og.jpg is served from ../public, the Worker's static assets directory (wrangler.toml [assets], no binding). Static assets answer before the Worker runs, so that one path never reaches it; every other path still does. public/og.jpg is a copy of kit/web/og.jpg, and this check compares them.",
+    "The home page (src/pages/door.js) carries the snippet's social lines (og:*, twitter:card) as kit/web/head-snippet.html writes them, without its icon and manifest links. head-home.html (Organization JSON-LD) is not used: its logo is the monogram icon.",
+    "Known differences, by design: the card is set in Shippori Mincho, not the page's Cormorant Garamond and Noto Serif TC (generator 1.8 sets cards in the wordmark's face, and only faces bundled with vectorcraft-cli or installed can be outlined; review 2026-11-02 §4.5, generator 1.9); its title is the kit's dark text role #F7F7F5 and its subtitle #A4A199, a step brighter than the page's #e9e6df and #8a877e (generator 1.8 derives them from the neutral scale).",
+    "check.mjs is not wired yet; planned: `npm run test:brand` (node brand/check.mjs) as a step in .github/workflows/ci.yml, beside npm test. A new blocking step is the owner's choice.",
+    "/favicon.ico and /apple-touch-icon.png answer the Worker's 404 page, and will until the owner chooses a mark (re-checked locally 2026-11-10).",
+    "The repository root's index.html (pink accent #ff6b9d) is an older page. On 2026-11-10 https://sinovai.vercel.app/ still served it (200, 8,374 bytes), and /robots.txt there answered 404, although vercel.json redirects every path: GitHub's deployments list shows a Production deployment of febe50a (before the redirects) created at 10:48Z on 2026-11-09, after 10a424b's at 09:51Z. Which deployment the domain points at was not checked (no Vercel access used)."
   ]
 }
