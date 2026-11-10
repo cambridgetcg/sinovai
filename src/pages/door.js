@@ -97,7 +97,7 @@ section{padding:7rem 1.5rem;border-top:1px solid var(--hair)}
 /* ── the hero: two leaves part, lamplight rises, the museum is behind ── */
 .hero{position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
   overflow:hidden;padding:0 1.5rem}
-.stage{position:relative;width:100%;max-width:62rem;text-align:center;padding:5rem 0 7rem} /* the bottom keeps the enter cue clear of the records line */
+.stage{position:relative;width:100%;max-width:62rem;text-align:center;padding:5rem 0}
 .lamplight{position:absolute;left:50%;top:50%;width:120vw;height:120vh;transform:translate(-50%,-50%);
   z-index:1;opacity:0;
   background:radial-gradient(38% 46% at 50% 50%,rgba(232,198,122,.20),rgba(232,198,122,.06) 42%,transparent 66%);
@@ -215,9 +215,18 @@ footer{border-top:1px solid var(--hair);padding:6rem 1.5rem 5rem;text-align:cent
 .mark{margin-top:2.6rem;writing-mode:vertical-rl;display:inline-block;font-family:var(--cjk);
   font-weight:300;font-size:1.5rem;color:var(--dim);letter-spacing:.4em}
 
+/* ── short screens: the enter cue is only a scroll hint (aria-hidden, not a link). It shows where the screen is
+   tall enough for it to clear the records line at the headline's widest breath, and nowhere else (heights
+   measured per width on 2026-11-10 with the live records line). At 640px and under the rail takes its own
+   space, so the cue would sit below the first screen. ── */
+@media (width <= 640px), (640px < width < 950px) and (height < 840px), (width >= 950px) and (height < 935px){
+  .scrollcue{display:none}
+}
+
 /* ── small screens ── */
-/* where the stage fills the width, the vertical line stands in the right gutter, beside the text, as on wide screens */
-@media (max-width:900px){
+/* under 760px the vertical line would cross the paragraph or the link rows: it stands in the right gutter instead,
+   beside the text, as on wide screens */
+@media (width < 760px){
   .kanji-seam{right:-1.7em}          /* one line wide (line-height 1.7): its edge meets the text column's */
 }
 @media (max-width:640px){
