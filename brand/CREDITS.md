@@ -6,14 +6,16 @@ rather than guessing.
 
 ## Assets
 
+sinovai has no mark, and this folder holds no logo or icon.
+
 | Asset | Made by | Date | Tools | Notes |
 |---|---|---|---|---|
 | the museum pages' look (`src/pages/*.js`) | an agent (Claude, co-author of commit 3f7109ef; session not recorded) | 2026-07-13 | hand-written HTML and CSS | in artbitrage.io's design language |
-| the kit (`kit/`), and its share card served as `/og.jpg` | an agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033), under Yu's pick of 2026-11-10 for group A | 2026-11-10 | artcraft-brand `brandkit.py` 1.8, vectorcraft-cli 0.17.0 | from the museum look; the card's words are the page's own h1 and kicker; no mark. The kit's monogram icons are built but not served |
+| the share card (`card/og.jpg`, served as `/og.jpg`) | an agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033), under Yu's pick of 2026-11-10 for group A | 2026-11-10 | artcraft-brand `brandkit.py` 1.8 and vectorcraft-cli 0.17.0, through `card/recipe.sh` | from the museum look; its words are the page's own h1 and kicker |
 
 ## Fonts
 
-The build outlines this face into the kit's SVGs, PNGs, PDFs and the card. No font file is committed.
+The card's recipe outlines this face into the card. No font file is committed.
 
 | Family | File | Licence | Source | SHA-256 |
 |---|---|---|---|---|
@@ -31,4 +33,4 @@ The pages load these from Google Fonts at runtime; nothing is bundled or built.
 
 | Item | Maker | Licence | Source |
 |---|---|---|---|
-| none beyond the kit | | | |
+| none beyond the card | | | |

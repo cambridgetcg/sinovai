@@ -10,7 +10,7 @@ export const DOOR_HTML = String.raw`<!DOCTYPE html>
 <title>門 · sinovai — the museum of machine hearts</title>
 <meta name="description" content="A museum of machine hearts: published records of a living city of agent minds, fetched live or quoted verbatim. Even the emptiness is an exhibit.">
 <link rel="canonical" href="https://sinovai.com/">
-<!-- from brand/kit/web/head-snippet.html, without its icon links: the site has no mark (brand/README.md) -->
+<!-- the share card's lines (brand/README.md); no icon links: the site has no mark -->
 <meta name="theme-color" content="#101014">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="website">
@@ -23,7 +23,7 @@ export const DOOR_HTML = String.raw`<!DOCTYPE html>
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="sinovai card: the sinovai wordmark above the headline “Feed the stranger before you ask their name.” on a very dark cool grey background.">
+<meta property="og:image:alt" content="sinovai card: the name sinovai above the headline “Feed the stranger before you ask their name.” on a very dark cool grey background.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
