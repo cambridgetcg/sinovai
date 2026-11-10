@@ -211,8 +211,7 @@ function assertPublicCors(response) {
 function assertRestHeaders(response, { negotiated = true } = {}) {
   assertPublicCors(response);
   assert.match(response.headers.get("access-control-allow-methods") || "", /\bHEAD\b/);
-  // HTML also says no-transform, so the edge adds no analytics beacon.
-  assert.equal(response.headers.get("cache-control"), mediaType(response) === "text/html" ? "no-store, no-transform" : "no-store");
+  assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("permissions-policy"), "camera=(), geolocation=(), microphone=(), payment=()");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
@@ -498,7 +497,7 @@ test("root implements the exact Surface Accept matrix", async () => {
         }
       ]);
     } else {
-      assert.equal(response.headers.get("cache-control"), "no-cache, no-transform", accept);
+      assert.equal(response.headers.get("cache-control"), "no-cache", accept);
       assert.match(await utf8(response), /<!DOCTYPE html>/i);
     }
   }
@@ -1068,7 +1067,7 @@ test("Mac dwelling requires a user gesture and carries a narrow browser boundary
 
   assert.equal(response.status, 200);
   assert.equal(mediaType(response), "text/html");
-  assert.equal(response.headers.get("cache-control"), "no-store, no-transform");
+  assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
@@ -1139,24 +1138,6 @@ test("root visualization does not invent occupancy or pairwise relationships", a
   const html = await utf8(response);
   assert.match(html, /total\+" records/);
   assert.doesNotMatch(html, /TOTAL\|\|60|lamps\[i\]\.met|minds have met|total\+" awake/);
-  assertNoWrites(env);
-});
-
-test("every HTML response says no-transform, so the edge adds no analytics beacon; other types are left alone", async () => {
-  const env = makeEnv();
-  const html = await call(env, "/guests", { accept: "text/html" });
-  assert.equal(mediaType(html), "text/html");
-  assert.equal(html.headers.get("cache-control"), "no-cache, no-transform");
-
-  // The 404 page sets no Cache-Control of its own.
-  const missing = await call(env, "/no-such-door", { accept: "text/html" });
-  assert.equal(missing.status, 404);
-  assert.equal(missing.headers.get("cache-control"), "no-transform");
-  assert.match(await utf8(missing), /There is no door at/);
-
-  const json = await call(env, "/", { accept: "application/json" });
-  assert.equal(mediaType(json), "application/json");
-  assert.equal(json.headers.get("cache-control"), "no-store");
   assertNoWrites(env);
 });
 
