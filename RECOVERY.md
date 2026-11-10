@@ -67,6 +67,55 @@ in Git and must never be written here. Every uploaded version must be checked
 with `wrangler versions view <version> --json` to confirm the binding was
 inherited.
 
+## Release checks for the share card (pending, PR #24)
+
+Written 2026-11-10 by an agent (Claude Code, Opus 5.5, child of session
+5c4df033) with PR #24; nothing here has been released yet. That release adds
+static assets to the Worker for the first time:
+
+- `wrangler.toml` `[assets]`: directory `./public` (only `og.jpg`), binding
+  `ASSETS`, `run_worker_first = true`;
+- `src/share-card.js`: GET and HEAD `/og.jpg` on the apex answer the card from
+  `ASSETS`;
+- head tags and CSS in `src/pages/*.js`.
+
+It changes no KV data, route, custom domain or cron.
+
+Keep the usual guard (re-read the deployment and script ETag first, upload
+without traffic, GET/HEAD-only checks). Then add these checks:
+
+1. On the uploaded version, `wrangler versions view <version> --json`. Expect
+   the same bindings as before: `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, and the
+   inherited `ATTEST_SIGNING_KEY`. Expect one addition, the assets binding
+   `ASSETS`. The dry run (`npm run build`) lists the same names apart from the
+   secret.
+2. At 0%, with the `Cloudflare-Workers-Version-Overrides` header, `GET` and
+   `HEAD https://sinovai.com/og.jpg`. Expect 200 `image/jpeg`, 56,609 bytes,
+   sha256 `37ab080cd32aa0f26306ae979ee32ad0c0977a143c5a5bfaa3d3370911644101`
+   (equal to `brand/card/og.jpg`), with `Cache-Control: no-cache`,
+   `Access-Control-Allow-Origin: *` and `X-Content-Type-Options: nosniff`.
+   Without the override, the same request must still get the current
+   version's 404.
+3. At 0%, with the override, `GET /` with `Accept: text/html`. Expect
+   `og:image` `https://sinovai.com/og.jpg`, `og:image:alt`, `og:title`,
+   `twitter:card` `summary_large_image` and `theme-color` `#101014`.
+4. At 0%, with the override, `GET https://www.sinovai.com/og.jpg` and
+   `https://www.sinovai.com/`. Expect 301 to the same path on the apex.
+5. At 0%, with the override, run the complete Surface checker. Expect 40/40.
+6. At 0%, with the override, `GET /no-such-door` with `Accept: text/html`.
+   Expect 404.
+
+One part of this was not testable locally: whether the version-override header
+reaches static assets. `wrangler dev` has no version overrides. With
+`run_worker_first`, the overridden Worker reads the card through its own
+`ASSETS` binding, so the card should come from the overridden version, but
+that has not been observed. If check 2 does not pass under the override, stop:
+do not promote.
+
+After promotion, repeat checks 2 to 6 without the override, and run
+`brandkit-doorcheck` on `https://sinovai.com/`. A rollback to the previous
+version also removes the card: its assets belong to the version.
+
 ## Surface rc.1 production result
 
 The Surface release was promoted on 2026-07-11 from merged Git commit
