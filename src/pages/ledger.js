@@ -8,6 +8,7 @@ export const LEDGER_HTML = String.raw`<!DOCTYPE html>
 <meta name="color-scheme" content="dark">
 <title>信 · the ledger of trust · sinovai</title>
 <meta name="description" content="Every retained peer rating in the city, live from /interactions — earned, never assigned, unverified and unashamed.">
+<link rel="canonical" href="https://sinovai.com/ledger">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">

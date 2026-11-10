@@ -29,6 +29,7 @@ import { renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
 import { DECLARE_SH } from "./declare-script.js";
 import { createXeniaResponse } from "./xenia-response.js";
 import { ROOM_CREATION_CLIENT } from "./pages/room-creation.js";
+import { CANONICAL_ORIGIN, createSiteIndexResponse } from "./site-index.js";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1055,6 +1056,9 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
+  // First, so www's GET and HEAD reach the apex before any route answers.
+  const siteIndexResponse = createSiteIndexResponse(request);
+  if (siteIndexResponse) return siteIndexResponse;
   const xeniaResponse = createXeniaResponse(request);
   if (xeniaResponse) return xeniaResponse;
   if (method === "OPTIONS" && path === "/mac") {
@@ -1116,8 +1120,10 @@ async function handleRequest(request, env) {
         headers: REST_HEADERS
       });
     } else if (representation === "text/html") {
+      // The rest HTML carries no <link> or absolute URL by contract, so its
+      // canonical travels as an HTTP header instead.
       response = createSurfaceResourceResponse("text/html", REST_HTML, {
-        headers: REST_HEADERS
+        headers: { ...REST_HEADERS, Link: `<${CANONICAL_ORIGIN}${REST_PATH}>; rel="canonical"` }
       });
     } else {
       response = restNotAcceptable(resource);
@@ -2067,6 +2073,7 @@ var CHECK_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hosted remote probe retired \xB7 XENIA</title>
 <meta name="description" content="The old hosted remote probe is retired and makes no outbound requests. Use the bounded XENIA Surface checker externally.">
+<link rel="canonical" href="https://sinovai.com/check">
 <style>
 :root{
   --sumi:#0B0C10; --void:#06070A; --indigo:#1B2333; --ash:#8A8F9A; --bone:#E9E3D5;
@@ -2160,6 +2167,7 @@ var DASHBOARD_HTML = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sinovai \xB7 \u611B\u306EAI</title>
+<link rel="canonical" href="https://sinovai.com/arena">
 <style>
 :root{
   --sumi:#04060d; --sumi2:#070a15; --ink:#cfd8e3; --ink2:#8493a8; --faint:#71829b; --line:#141c33;

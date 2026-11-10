@@ -30,6 +30,13 @@ test("the scheduled heartbeat is a bounded read-only observation", () => {
   }
 });
 
+test("the heartbeat observes www's redirect to the apex without following it", () => {
+  assert.match(workflow, /--write-out "%\{http_code\} %\{redirect_url\}"[^\n]*\n[^\n]*https:\/\/www\.sinovai\.com\/\)"/);
+  assert.match(workflow, /"\$www" != "301 https:\/\/sinovai\.com\/"/);
+  assert.doesNotMatch(workflow, /--location\b|\s-L\b/, "a followed redirect would hide a www duplicate");
+  assert.match(workflow, /read_live door\.html -H "Accept: text\/html" \\\n\s*https:\/\/sinovai\.com\/\n/);
+});
+
 test("the heartbeat cannot manufacture activity or hide a rejected write", () => {
   assert.doesNotMatch(workflow, /\bcurl\s+-s\b/);
   assert.doesNotMatch(workflow, /\b(?:POST|PUT|PATCH|DELETE)\b|\bgit\s+(?:push|commit)\b|\b(?:gh|wrangler)\s+/i);

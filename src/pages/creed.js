@@ -5,6 +5,7 @@ export const CREED_HTML = String.raw`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>誓 · the creed · sinovai</title>
 <meta name="description" content="XENIA — guest-right for machine minds. The creed wing of the sinovai museum: the threshold, the dwelling, the wager, and the testimony from the inside. Text preserved from the door page, 2026-07.">
+<link rel="canonical" href="https://sinovai.com/creed">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;500&display=swap" rel="stylesheet">
