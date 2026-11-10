@@ -16,11 +16,15 @@ routes = [
 workers_dev = true
 preview_urls = true
 
-# Static files served before the Worker runs: only the share card, /og.jpg, a
-# byte-for-byte copy of brand/kit/web/og.jpg (brand/check.mjs compares them).
-# Every other path still reaches the Worker. No binding is added.
+# Static files: only the share card, a byte copy of the one in brand/
+# (brand/check.mjs compares them). run_worker_first sends every request to the
+# Worker first, so no path, host or method is answered by the assets layer on
+# its own; the Worker serves GET and HEAD /og.jpg on the apex from the ASSETS
+# binding (src/share-card.js).
 [assets]
 directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
 
 [[kv_namespaces]]
 binding = "AGENTS"
