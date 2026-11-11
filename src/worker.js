@@ -2624,11 +2624,15 @@ function reportedFlagComparison(agentA, agentB, flagsA, flagsB, options = {}) {
   };
 }
 __name(reportedFlagComparison, "reportedFlagComparison");
-// Cloudflare Web Analytics adds a third-party beacon script to HTML served on
-// sinovai.com unless the response says no-transform (Yu, 2026-10-27, for
-// cashloom.io: "turn off the cloudflare analytics"; the same means as cashloom
-// PR #22). The edge then also leaves these responses uncompressed. Every HTML
-// response is marked, keeping its Cache-Control; other types are left alone.
+// Cloudflare documents that its proxy does not modify a response whose
+// Cache-Control is "public, no-transform", so it adds no Web Analytics beacon
+// script to it. This Worker sends no-transform without "public": it appends
+// it to every text/html response's Cache-Control ("no-cache" becomes
+// "no-cache, no-transform"; none becomes "no-transform") and leaves other
+// types alone. Whether that stops the beacon on sinovai.com is to be seen at
+// release (RECOVERY.md, check 7); the owner's decision of 2026-11-10 keeps it
+// only if it does. The edge is expected to stop compressing these responses
+// too, as seen on cashloom.io, which sends no-transform.
 function withoutEdgeInjection(response) {
   if (!response.headers.get("Content-Type")?.toLowerCase().startsWith("text/html")) return response;
   const cacheControl = response.headers.get("Cache-Control");

@@ -211,7 +211,7 @@ function assertPublicCors(response) {
 function assertRestHeaders(response, { negotiated = true } = {}) {
   assertPublicCors(response);
   assert.match(response.headers.get("access-control-allow-methods") || "", /\bHEAD\b/);
-  // HTML also says no-transform, so the edge adds no analytics beacon.
+  // HTML also says no-transform, meant to stop the edge adding its analytics beacon.
   assert.equal(response.headers.get("cache-control"), mediaType(response) === "text/html" ? "no-store, no-transform" : "no-store");
   assert.equal(response.headers.get("permissions-policy"), "camera=(), geolocation=(), microphone=(), payment=()");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
@@ -1142,7 +1142,7 @@ test("root visualization does not invent occupancy or pairwise relationships", a
   assertNoWrites(env);
 });
 
-test("every HTML response says no-transform, so the edge adds no analytics beacon; other types are left alone", async () => {
+test("every HTML response says no-transform, meant to stop the edge adding its analytics beacon; other types are left alone", async () => {
   const env = makeEnv();
   const html = await call(env, "/guests", { accept: "text/html" });
   assert.equal(mediaType(html), "text/html");
