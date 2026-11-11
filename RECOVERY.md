@@ -162,14 +162,16 @@ O="Cloudflare-Workers-Version-Overrides: sinovai=\"$V\""
    here asks for the home page as a browser would.
    ```sh
    A='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-   P=<current-version-id>              # the version at 100%, from the deployment re-read before upload
+   P=<current-version-id>              # the version at 100%, from the deployment re-read before upload:
+                                       #   ./node_modules/.bin/wrangler deployments status
    ```
    First a control on the version that is live now, plainly and through the
    override header. Use `--compressed` on every request in this check: without
    it, curl saves the compressed bytes, and grep finds no `cloudflareinsights`
    in them even when the script is there (seen on 2026-11-11: asked for
    `gzip, br` without `--compressed`, the live page came back brotli-encoded
-   and grep counted 0 although it carried the script).
+   and grep found no match, printing 0 or no output at all, although the page
+   carried the script).
    ```sh
    curl -sS --compressed -H "$A" https://sinovai.com/ | grep -c cloudflareinsights
    #   expect: 1 or more
@@ -192,15 +194,23 @@ O="Cloudflare-Workers-Version-Overrides: sinovai=\"$V\""
    #   expect: 0 (the body is already decoded)
    ```
    What to do with each result:
-   - **The script is gone** (200, no Content-Encoding line, count 0): check 7
-     passes. Promote once checks 1 to 6 have passed too.
-   - **The script is still there** (count 1 or more): the header has failed
-     the owner's condition of 2026-11-10. Do not promote this version. Revert
+   - **The script is gone** (200, `cache-control: no-cache, no-transform`, no
+     Content-Encoding line, count 0): check 7 passes. Promote once checks 1 to
+     6 have passed too.
+   - **The script is still there** (`cache-control: no-cache, no-transform`
+     and count 1 or more): the header has failed the owner's condition of
+     2026-11-10. Do not promote this version. Revert
      PR #25's change on main by pull request, upload a new version from that
      commit, run checks 1 to 6 again at 0% against it, and promote that one.
      Don't try `public, no-transform` or a dashboard setting during the
      release instead: the first is a new change for the owner to decide, and
      the second needs the owner's credential.
+   - **The override did not reach the new version** (a cache-control line
+     without `no-transform`): the version that is live now answered, and
+     Cloudflare does not say so. This shows nothing about the new version, so
+     do not revert. Confirm that `$V` is in the deployment at 0% and run the
+     block again; if the line still lacks `no-transform`, stop and ask the
+     owner.
    - **Anything else** (count 0 but a Content-Encoding line, or a status
      other than 200): do not promote; stop and ask the owner.
 
@@ -217,10 +227,11 @@ After promotion, repeat checks 2 to 7 without `-H "$O"` (and with
 `fetchImpl` left out of check 5); every line of check 2 then expects the card's
 200. Check 7 applies only if the promoted version carries PR #25: skip its
 control and run its second block without `-H "$O"`, with the same
-expectations. If the live page still carries `cloudflareinsights` then, the
-condition has failed after all: revert PR #25's change on main by pull request
-and release a version without it by these checks. Then run
-`brandkit-doorcheck` on `https://sinovai.com/`. A rollback to the previous
+expectations. If the live page still carries `cloudflareinsights` then, with
+`no-transform` in its cache-control, the condition has failed after all: revert
+PR #25's change on main by pull request and release a version without it by
+these checks. Any other result that is not a pass: stop and ask the owner.
+Then run `brandkit-doorcheck` on `https://sinovai.com/`. A rollback to the previous
 version also removes the card, since its assets belong to the version; from a
 version with PR #25 it also brings the beacon and the edge's compression back.
 
