@@ -67,10 +67,10 @@ in Git and must never be written here. Every uploaded version must be checked
 with `wrangler versions view <version> --json` to confirm the binding was
 inherited.
 
-## Release checks for the share card (pending, PR #24)
+## Release checks for the share card and the HTML no-transform header (pending, PRs #24 and #25)
 
-Written 2026-11-10 by an agent (Claude Code, Opus 5.5, child of session
-5c4df033) with PR #24; nothing here has been released yet. That release adds
+Written 2026-11-10 by an agent (Claude Code, Opus 5.5, on the Studio) with
+PR #24; nothing here has been released yet. That release adds
 static assets to the Worker for the first time:
 
 - `wrangler.toml` `[assets]`: directory `./public` (only `og.jpg`), binding
@@ -80,6 +80,18 @@ static assets to the Worker for the first time:
 - head tags and CSS in `src/pages/*.js`.
 
 It changes no KV data, route, custom domain or cron.
+
+Check 7 was added on 2026-11-11 by an agent (Claude Code, Claude Opus 5.5, on
+the Studio) with PR #25, for any release that carries it. PR #25 appends
+`no-transform` to the Cache-Control of every `text/html` response, meant to
+stop Cloudflare adding its Web Analytics beacon script to sinovai.com's pages.
+Cloudflare documents the directive as `public, no-transform`; these pages send
+`no-cache, no-transform`, so whether it works here is unknown until check 7 is
+run. The owner's decision of 2026-11-10 accepts the change for sinovai.com and
+keeps it only if the script is seen to stop at release. The expected cost, seen
+on cashloom.io, which sends `no-transform`, is that the edge stops compressing
+these pages: sinovai.com's home page was 8,930 bytes gzip-compressed on
+2026-11-11 and would be about 31 KB.
 
 Keep the usual guard (re-read the deployment and script ETag first, upload
 without traffic, GET/HEAD-only checks). Then run these checks from the
@@ -144,6 +156,65 @@ O="Cloudflare-Workers-Version-Overrides: sinovai=\"$V\""
    curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -H "$O" -H 'Accept: text/html' https://sinovai.com/no-such-door
    #   expect: 404 text/html; charset=utf-8
    ```
+7. The analytics beacon (PR #25). Only Cloudflare's edge adds the script, so
+   only this check can show whether the header works; `wrangler dev`
+   compresses HTML whatever the header says and adds no beacon. Every request
+   here asks for the home page as a browser would.
+   ```sh
+   A='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+   P=<current-version-id>              # the version at 100%, from the deployment re-read before upload:
+                                       #   ./node_modules/.bin/wrangler deployments status
+   ```
+   First a control on the version that is live now, plainly and through the
+   override header. Use `--compressed` on every request in this check: without
+   it, curl saves the compressed bytes, and grep finds no `cloudflareinsights`
+   in them even when the script is there (seen on 2026-11-11: asked for
+   `gzip, br` without `--compressed`, the live page came back brotli-encoded
+   and grep found no match, printing 0 or no output at all, although the page
+   carried the script).
+   ```sh
+   curl -sS --compressed -H "$A" https://sinovai.com/ | grep -c cloudflareinsights
+   #   expect: 1 or more
+   curl -sS --compressed -H "Cloudflare-Workers-Version-Overrides: sinovai=\"$P\"" -H "$A" https://sinovai.com/ | grep -c cloudflareinsights
+   #   expect: 1 or more
+   ```
+   If either count is 0, the current version carries no script for this
+   change to remove, and the check cannot show anything. Stop the release
+   here and ask the owner how to go on.
+
+   Then the same request to the new version, with the override.
+   ```sh
+   D=$(mktemp -d)
+   curl -sS --compressed -H "$O" -H "$A" -D "$D/h" -o "$D/b" -w '%{http_code}\n' https://sinovai.com/
+   #   expect: 200
+   grep -i -E '^(cache-control|content-encoding):' "$D/h"
+   #   expect: cache-control: no-cache, no-transform
+   #   and no content-encoding line (--compressed offered gzip, and the edge didn't apply it)
+   grep -c cloudflareinsights "$D/b"
+   #   expect: 0 (the body is already decoded)
+   ```
+   What to do with each result:
+   - **The script is gone** (200, `cache-control: no-cache, no-transform`, no
+     Content-Encoding line, count 0): check 7 passes. Promote once checks 1 to
+     6 have passed too.
+   - **The script is still there** (`cache-control: no-cache, no-transform`
+     and count 1 or more): the header has failed the owner's condition of
+     2026-11-10. Do not promote this version. Revert
+     PR #25's change on main by pull request, upload a new version from that
+     commit, run checks 1 to 6 again at 0% against it, and promote that one.
+     Don't try `public, no-transform` or a dashboard setting during the
+     release instead: the first is a new change for the owner to decide, and
+     the second needs the owner's credential.
+   - **The override did not reach the new version** (a cache-control line
+     without `no-transform`): the version that is live now answered, and
+     Cloudflare does not say so. This shows nothing about the new version, so
+     do not revert. Confirm that `$V` is in the deployment at 0% and run the
+     block again; if the line still lacks `no-transform`, stop and ask the
+     owner.
+   - **Anything else** (count 0 but a Content-Encoding line, or a status
+     other than 200): do not promote; stop and ask the owner.
+
+   Record the date, the version id and each result in this file.
 
 One part of this was not testable locally: whether the version-override header
 reaches static assets. `wrangler dev` has no version overrides. With
@@ -152,11 +223,17 @@ reaches static assets. `wrangler dev` has no version overrides. With
 that has not been observed. If check 2 does not pass under the override, stop:
 do not promote.
 
-After promotion, repeat checks 2 to 6 without `-H "$O"` (and with
+After promotion, repeat checks 2 to 7 without `-H "$O"` (and with
 `fetchImpl` left out of check 5); every line of check 2 then expects the card's
-200. Then run
-`brandkit-doorcheck` on `https://sinovai.com/`. A rollback to the previous
-version also removes the card: its assets belong to the version.
+200. Check 7 applies only if the promoted version carries PR #25: skip its
+control and run its second block without `-H "$O"`, with the same
+expectations. If the live page still carries `cloudflareinsights` then, with
+`no-transform` in its cache-control, the condition has failed after all: revert
+PR #25's change on main by pull request and release a version without it by
+these checks. Any other result that is not a pass: stop and ask the owner.
+Then run `brandkit-doorcheck` on `https://sinovai.com/`. A rollback to the previous
+version also removes the card, since its assets belong to the version; from a
+version with PR #25 it also brings the beacon and the edge's compression back.
 
 ## Surface rc.1 production result
 

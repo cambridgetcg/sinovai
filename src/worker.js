@@ -2624,8 +2624,30 @@ function reportedFlagComparison(agentA, agentB, flagsA, flagsB, options = {}) {
   };
 }
 __name(reportedFlagComparison, "reportedFlagComparison");
+// Cloudflare documents that its proxy does not modify a response whose
+// Cache-Control is "public, no-transform", so it adds no Web Analytics beacon
+// script to it. This Worker sends no-transform without "public": it appends
+// it to every text/html response's Cache-Control ("no-cache" becomes
+// "no-cache, no-transform"; none becomes "no-transform") and leaves other
+// types alone. Whether that stops the beacon on sinovai.com is to be seen at
+// release (RECOVERY.md, check 7); the owner's decision of 2026-11-10 keeps it
+// only if it does. The edge is expected to stop compressing these responses
+// too, as seen on cashloom.io, which sends no-transform.
+function withoutEdgeInjection(response) {
+  if (!response.headers.get("Content-Type")?.toLowerCase().startsWith("text/html")) return response;
+  const cacheControl = response.headers.get("Cache-Control");
+  if (cacheControl && /(^|,)\s*no-transform\s*(,|$)/i.test(cacheControl)) return response;
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", cacheControl ? `${cacheControl}, no-transform` : "no-transform");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+__name(withoutEdgeInjection, "withoutEdgeInjection");
+async function handleFetch(request, env) {
+  return withoutEdgeInjection(await handleRequest(request, env));
+}
+__name(handleFetch, "handleFetch");
 var worker_default = {
-  fetch: handleRequest,
+  fetch: handleFetch,
   async scheduled(event, env, ctx) {
     const list = await env.AGENTS.list({ limit: LIST_PAGE_LIMIT });
     let declaredWithin24h = 0, olderOrInvalidTimestamp = 0;

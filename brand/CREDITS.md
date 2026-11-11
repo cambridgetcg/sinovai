@@ -11,7 +11,7 @@ sinovai has no mark, and this folder holds no logo or icon.
 | Asset | Made by | Date | Tools | Notes |
 |---|---|---|---|---|
 | the museum pages' look (`src/pages/*.js`) | an agent (Claude, co-author of commit 3f7109ef; session not recorded) | 2026-07-13 | hand-written HTML and CSS | in artbitrage.io's design language |
-| the share card (`card/og.jpg`, served as `/og.jpg`) | an agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033), under Yu's pick of 2026-11-10 for group A | 2026-11-10 | artcraft-brand `brandkit.py` 1.8 and vectorcraft-cli 0.17.0, through `card/recipe.sh` | from the museum look; its words are the page's own h1 and kicker |
+| the share card (`card/og.jpg`, served as `/og.jpg`) | an agent (Claude Code, Opus 5.5, on the Studio), under the owner's decision of 2026-11-10 | 2026-11-10 | artcraft-brand `brandkit.py` 1.8 and vectorcraft-cli 0.17.0, through `card/recipe.sh` | from the museum look; its words are the page's own h1 and kicker |
 
 ## Fonts
 

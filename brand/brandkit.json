@@ -2,7 +2,7 @@
   "format": "brandkit.project/1",
   "name": "sinovai",
   "kind": "hand-made",
-  "owner": "the sinovai lane: the session that releases by RECOVERY.md (ledger sv-17-xenia-guests calls it 'its owner session')",
+  "owner": "the sinovai lane: the session that releases by RECOVERY.md",
   "decided": [
     {
       "part": "the museum look",
@@ -16,12 +16,12 @@
       "part": "a mark",
       "status": "held",
       "what": "sinovai has no mark, and this folder holds none. Choosing one (a favicon glyph such as 門, or anything else) is the owner's",
-      "waits_on": "the owner's choice (review 2026-11-02 §6, sinovai item 3)"
+      "waits_on": "the owner's choice"
     },
     {
       "part": "the share card",
-      "by": "agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033)",
-      "under": "Yu's pick of 2026-11-10 for group A, \"Go: build, open PRs, merge\", described as visible defect fixes, icons and share cards for sites that lack them (from each site's current look), and Cloudflare analytics off on we-are, chillspace and sinovai (ledger kingdom-visual-grammar, A1, A2 and A6)",
+      "by": "agent (Claude Code, Opus 5.5, on the Studio)",
+      "under": "the owner's decision of 2026-11-10: visible defect fixes, icons and share cards for sites that lack them (from each site's current look), and Cloudflare analytics off on we-are, chillspace and sinovai",
       "date": "2026-11-10",
       "what": "a share card from the museum look, with no mark: the name 'sinovai' in #e9e6df, the cinnabar rule #d34a3a, the page's own h1 and kicker, on #101014, set in Shippori Mincho; theme-color #101014 and color-scheme dark on the six museum rooms",
       "record": "brand/README.md, 'The share card', and pull request cambridgetcg/sinovai#24"
@@ -85,7 +85,7 @@
     "card/brand.json uses the generator's schema: its 'wordmark' key is the site's name set in type on the card, not a logo.",
     "The Worker (src/worker.js, routes sinovai.com/* and www.sinovai.com/*) serves every page. The HTML lives in template literals in src/pages/*.js; site.html lists the six museum rooms (not a glob: museum-catalogue.js and room-creation.js in the same folder hold no head). Each carries theme-color #101014, their painted ground, and color-scheme dark; icons: false because no icon is served.",
     "/og.jpg: ../public is the Worker's static assets directory, with the ASSETS binding and run_worker_first = true (wrangler.toml), so every request reaches the Worker first. src/share-card.js serves GET and HEAD /og.jpg on the apex from the binding, with the headers of the Worker's other static files; every other path, host and method answers as before. public/og.jpg is a copy of card/og.jpg, and this check compares them.",
-    "Known differences, by design: the card is set in Shippori Mincho, not the page's Cormorant Garamond and Noto Serif TC (the generator sets a card in the face of its name, and only faces bundled with vectorcraft-cli or installed can be outlined; review 2026-11-02 §4.5, generator 1.9); its title is #F7F7F5 and its kicker #A4A199, a step brighter than the page's #e9e6df and #8a877e (the generator derives them from a neutral scale).",
+    "Known differences, by design: the card is set in Shippori Mincho, not the page's Cormorant Garamond and Noto Serif TC (the generator sets a card in the face of its name, and only faces bundled with vectorcraft-cli or installed can be outlined; generator 1.9); its title is #F7F7F5 and its kicker #A4A199, a step brighter than the page's #e9e6df and #8a877e (the generator derives them from a neutral scale).",
     "check.mjs is not wired into CI; a new blocking step is the owner's choice. test/share-card.test.mjs runs in npm test and covers the route, not the card's bytes.",
     "/favicon.ico and /apple-touch-icon.png answer the Worker's 404 page, and will until the owner chooses a mark.",
     "The repository root's index.html (pink accent #ff6b9d) is an older page. On 2026-11-10 https://sinovai.vercel.app/ still served it (200, 8,374 bytes), and /robots.txt there answered 404, although vercel.json redirects every path: GitHub's deployments list shows a Production deployment of febe50a (before the redirects) created at 10:48Z on 2026-11-09, after 10a424b's at 09:51Z. Which deployment the domain points at was not checked (no Vercel access used)."
