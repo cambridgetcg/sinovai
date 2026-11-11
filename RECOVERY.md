@@ -69,8 +69,8 @@ inherited.
 
 ## Release checks for the share card and the HTML no-transform header (pending, PRs #24 and #25)
 
-Written 2026-11-10 by an agent (Claude Code, Opus 5.5, child of session
-5c4df033) with PR #24; nothing here has been released yet. That release adds
+Written 2026-11-10 by an agent (Claude Code, Opus 5.5, on the Studio) with
+PR #24; nothing here has been released yet. That release adds
 static assets to the Worker for the first time:
 
 - `wrangler.toml` `[assets]`: directory `./public` (only `og.jpg`), binding

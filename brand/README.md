@@ -13,9 +13,8 @@ recorded), before Yu's delegation of 2026-10-20. Whether Yu asked for this look 
 
 ## The share card
 
-An agent (Claude Code, Opus 5.5, device studio, child of session 5c4df033) made it on 2026-11-10, under Yu's pick for
-group A that day, "Go: build, open PRs, merge" (review 2026-11-02 §6 and §7, plan A2). It takes everything from the
-page and adds nothing of its own:
+An agent (Claude Code, Opus 5.5, on the Studio) made it on 2026-11-10, under the owner's decision of 2026-11-10. It
+takes everything from the page and adds nothing of its own:
 
 - **What it shows** (`card/og.jpg`, served at `/og.jpg`, 1200×630): the name `sinovai` in `#e9e6df`, the cinnabar
   rule, then the page's own h1 "Feed the stranger before you ask their name." as its title. Under that is the page's
