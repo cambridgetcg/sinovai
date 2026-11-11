@@ -67,10 +67,14 @@ in Git and must never be written here. Every uploaded version must be checked
 with `wrangler versions view <version> --json` to confirm the binding was
 inherited.
 
-## Release checks for the share card and the HTML no-transform header (pending, PRs #24 and #25)
+## Release checks for the share card and the HTML no-transform header (PRs #24 and #25)
+
+Released on 2026-11-11 as v58; every check below passed, and the results are in
+"Share card and HTML no-transform v58 production result" at the end of this
+file.
 
 Written 2026-11-10 by an agent (Claude Code, Opus 5.5, on the Studio) with
-PR #24; nothing here has been released yet. That release adds
+PR #24; nothing here had been released yet. That release adds
 static assets to the Worker for the first time:
 
 - `wrangler.toml` `[assets]`: directory `./public` (only `og.jpg`), binding
@@ -760,3 +764,125 @@ routes, custom domains or cron. This release adds no KV migration. The
 reconstruction is computed at read time and stores nothing, so a rollback simply
 stops serving it. `/guests/:name`, `/declare` and `/xenia/docs/*` then return
 404 again.
+
+## Share card and HTML no-transform v58 production result
+
+Released on 2026-11-11 by an agent (Claude Code, Claude Opus 5.5, on the
+Studio), by the release checks for PRs #24 and #25 above, under the owner's
+decision of 2026-11-10. PR #24 merged as `a424a42` and PR #25 as `06cc50a`. The
+Worker was released from `06cc50abcb0224ed000acb0587cfbdc3498aa98d`, which was
+main at the time, in a fresh clone with a clean tree.
+
+Local checks at that commit on Node 22, with Wrangler 4.149.0 from the lockfile:
+`npm run check` ok; `npm test` 210 tests, 209 pass, 1 skip (the optional
+`XENIA_COVENANT_REPO` cross-check); `npm run test:surface` conformant 40/0/0/0
+with 0 writes; `npm run build` 884.09 KiB (gzip 218.02 KiB), with bindings
+`AGENTS`, `INTERACTIONS`, `ASSETS` and `SITE_TITLE`.
+
+Immediately before upload, Cloudflare reported:
+
+- deployment `563ab161-d18a-48d9-a328-fccb649fac8d`;
+- Worker v57, `790ff7f4-4133-4c0a-a462-8e9d2d812f8d` (tag
+  `index-hygiene-10a424b`), at 100%;
+- script ETag
+  `969af81e24a1294b5bbc0c8bfd126fccfb41da34249162e68cb87a4d474f9b18`;
+- fetch and scheduled handlers, compatibility date `2024-12-01`, binding names
+  `AGENTS`, `INTERACTIONS`, `SITE_TITLE` and `ATTEST_SIGNING_KEY`, and no
+  `ASSETS`.
+
+v57 is the index hygiene release of 2026-11-09 from `10a424b`. Its own record
+is open as PR #22 and is not in this file yet.
+
+The source was uploaded without traffic by `npm run release:upload`, with a tag
+and message as earlier releases had:
+
+- Worker v58, `579fd72b-4dd2-44b8-9d2e-f2d5e4795b41`;
+- tag `share-card-06cc50a`;
+- message `Share card, hero fixes and HTML no-transform (PRs 24 and 25) from
+  main 06cc50a`;
+- script ETag
+  `0a1f7c171e2242df96e9f8227c14fe08d5c664fdccb77e445be31003ae813d49`;
+- one static asset, `/og.jpg`;
+- binding names `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, the inherited
+  `ATTEST_SIGNING_KEY` and the new `ASSETS` (type `assets`), both handlers, and
+  compatibility date `2024-12-01`.
+
+Deployment `e4a777cd-a91e-4dbd-8b25-411acd54a4ab` attached v58 at 0% beside
+v57 at 100% at `2026-11-11T12:50:17Z`. Before the checks were trusted, the home
+page was asked for through the override header and answered
+`cache-control: no-cache, no-transform`; without the header it answered
+`no-cache`. The override therefore reached v58. The checks, with the override,
+GET and HEAD only, between 12:50 and 12:54Z:
+
+1. Bindings: the five names above.
+2. The card: `200 image/jpeg 56609`. SHA-256
+   `37ab080cd32aa0f26306ae979ee32ad0c0977a143c5a5bfaa3d3370911644101`, the same
+   as `brand/card/og.jpg` and `public/og.jpg`. HEAD: 200, `image/jpeg`,
+   `no-cache`, `Access-Control-Allow-Origin: *`, `nosniff`. Without the
+   override: 404.
+3. The home page's head: 5.
+4. www: `301 https://sinovai.com/og.jpg` and `301 https://sinovai.com/`.
+5. The Surface checker: conformant
+   `{"pass":40,"fail":0,"unknown":0,"not_run":0}`.
+6. The 404 page: `404 text/html; charset=utf-8`.
+7. The analytics beacon, three rounds a minute apart, at 12:51:38Z, 12:52:41Z
+   and 12:53:43Z. The control on v57 counted 1 plainly and 1 through its own
+   override in every round. A first control at 12:48:49Z gave the same, and
+   v57's home page was gzip-encoded, 8,930 bytes on the wire, with
+   `cache-control: no-cache`. v58, through the override, answered 200 with
+   `cache-control: no-cache, no-transform`, no Content-Encoding line, 31,169
+   bytes, and a `cloudflareinsights` count of 0, in all three rounds. The
+   script is gone, so the owner's condition of 2026-11-10 is met. Its cost is
+   the one recorded above: the home page is about 31 KB on the wire instead of
+   about 9 KB.
+
+Through the override, the six rooms (`/`, `/guests`, `/ledger`, `/hearts`,
+`/breath` and `/creed`) each answered 200 `text/html` with one
+`theme-color` `#101014`, one `color-scheme` `dark` and no script.
+
+After another exact 100/0 allocation guard, deployment
+`ed874585-9a60-4082-992b-eeb372f9cce5` promoted v58 directly to 100% at
+`2026-11-11T12:54:09.729052Z`, with no mixed-traffic canary. Wrangler reported
+no non-versioned settings to sync, and `wrangler triggers deploy` was not run.
+Routes, custom domains, cron and KV data were not changed.
+
+After promotion, the checks were repeated without the override between 12:54
+and 12:57Z. Checks 2 to 6 gave the same results, except that `/og.jpg` now
+answers 200 without the override too, and the live Surface checker was
+conformant at 40/0/0/0. All six rooms answered 200 with
+`cache-control: no-cache, no-transform`, theme-color and color-scheme. Check 7
+in its after-promotion form ran three rounds a minute apart, at 12:54:18Z,
+12:55:20Z and 12:56:21Z. Each answered 200 with
+`cache-control: no-cache, no-transform`, no Content-Encoding line, 31,169
+bytes, and a `cloudflareinsights` count of 0.
+
+The brandkit doorcheck of `https://sinovai.com`, compared with its run of
+2026-11-10, changed four results. theme-color, og:image (1200×630 JPEG, 56,609
+bytes, alt present, `summary_large_image`) and og:text went from fail to ok,
+and color-scheme went from unknown to ok. Nothing got worse. `favicon.ico`, the
+SVG icon, `apple-touch-icon` and the manifest still fail as before: the site has
+no mark, and choosing one is its owner's.
+
+## Current rollback target after the share card release
+
+The immediate code rollback target is the observed pre-release v57,
+`790ff7f4-4133-4c0a-a462-8e9d2d812f8d`. It is not v55, which the section
+above names: going back that far would also undo v57's index hygiene (the
+canonicals, robots.txt, sitemap.xml and the www 301).
+
+```sh
+./node_modules/.bin/wrangler versions deploy \
+  '790ff7f4-4133-4c0a-a462-8e9d2d812f8d@100%' \
+  --message 'Rollback share card and no-transform to v57' \
+  -y
+```
+
+Before using that command, re-read the active deployment and both version
+identities. Stop and reconcile if another operator has changed production.
+Rollback restores Worker code only. It does not undo KV writes or change
+routes, custom domains or cron, and this release adds no KV migration. The card
+belongs to the version, so a rollback also takes it away: `/og.jpg` answers 404
+again, and v57's home page has no og tags pointing at it. A rollback also brings
+back the analytics beacon and the edge's compression of HTML. After a rollback,
+require a v57-only allocation, `/og.jpg` answering 404, the home page's
+Cache-Control without `no-transform`, and passing Surface, 404 and www checks.
