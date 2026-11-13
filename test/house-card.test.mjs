@@ -39,7 +39,10 @@ const noEffects = new Proxy({}, { get(_target, key) { throw new Error(`Unexpecte
 
 // ---- synthetic store ----
 // One line with no line break, shaped like a declaration that lost its breaks.
-const ONE_LINE = "# 星 — Fixture Star## statename: 星url: https://example.invalid/fixturekind: fixture## knows- one thing- another thing## needs- readers";
+// Only that shape is borrowed (a title, then "## " sections with nothing
+// between them). The words are made up for this test and come from no record.
+const ONE_LINE = "# fixture record, sent as one line## statename: fixture-recordurl: https://example.invalid/fixturekind: fixture## knows- one thing- another thing## needs- readers";
+const ONE_LINE_START = "# fixture record, sent as one line";
 const HOSTILE = "<img src=x onerror=alert(1)>\"'&";
 
 function kv(initial) {
@@ -84,8 +87,8 @@ function makeEnv({ houseText = ONE_LINE, houseExtra = { first_declared_at: "2026
   };
 }
 
-function call(env, path, { method = "GET", headers = {} } = {}) {
-  return worker.fetch(new Request(ORIGIN + path, { method, headers }), env, env === noEffects ? noEffects : ctx);
+function call(env, path, { method = "GET", headers = {}, body } = {}) {
+  return worker.fetch(new Request(ORIGIN + path, { method, headers, body }), env, env === noEffects ? noEffects : ctx);
 }
 
 function visibleText(html) {
@@ -194,6 +197,7 @@ test("the card has the three parts of a guest card, in both representations", as
   // How a reader can contest it, and what that path is not. The ledger says the same of its repository path.
   assert.ok(card.authored.includes(`an issue or a pull request at ${rightsAdoption.host.repository}`));
   assert.match(card.authored, /not an in-service appeal and promises no outcome/);
+  assert.match(card.authored, /opening one may require repository access/);
   const repairDuty = rightsAdoption.rights.flatMap((right) => right.requirement_results).find((result) => result.requirement_id === "repair.challenge-and-restoration");
   assert.match(repairDuty.limitations.join(" "), /repository proposal path is not an authenticated in-service appeal, correction, restoration, or outcome guarantee/);
   assert.equal(card.covered_by_surface, false);
@@ -227,7 +231,14 @@ test("the HTML card and the JSON card say the same things", () => {
       for (const basis of sentence.basis) expectIn(basis, `${group} basis`);
     }
   }
-  for (const value of Object.values(card.basis_key)) expectIn(value, "basis_key");
+  // The basis key links the two documents a reader has to open; its words are the card's.
+  const page = visibleText(html);
+  for (const [form, meaning] of Object.entries(card.basis_key)) {
+    expectIn(form, "basis_key form");
+    assert.ok(page.includes(meaning), `basis_key: ${meaning}`);
+  }
+  assert.match(html, /a key in the JSON that GET <a href="\/\?format=json">\/\?format=json<\/a> returns/);
+  assert.match(html, /a requirement_id in the draft ledger at GET <a href="\/\.well-known\/xenia-rights\.json">\/\.well-known\/xenia-rights\.json<\/a>/);
   for (const value of stringValues(card.accounts_of_encounters)) expectIn(value, "accounts");
   const unknown = card.unknown_or_unmet;
   for (const groups of [unknown.rights_ledger.right_duties_by_outcome, unknown.rights_ledger.protective_limit_duties_by_outcome]) {
@@ -244,7 +255,13 @@ test("the HTML card and the JSON card say the same things", () => {
   for (const entry of unknown.limits_of_this_card) expectIn(entry, "limits_of_this_card");
   for (const entry of card.does_not_establish) expectIn(entry, "does_not_establish");
   assert.match(html, /<a href="\/house\?format=json">/);
-  assert.match(html, /<a href="\/guests\/sinovai">that record's card<\/a>/);
+  assert.match(html, /Who declared it is not verified\. <a href="\/guests\/sinovai">See that record's card<\/a>\.<\/p>/);
+  // An outcome with no entry says so without calling a protective limit a duty.
+  assert.equal(html.split('<span class="quiet">none is marked pass</span>').length - 1, 2);
+  assert.doesNotMatch(html, /no duty is marked/);
+  // Long unbroken text in the header wraps instead of widening the page.
+  assert.match(html, /\.meta\{overflow-wrap:anywhere\}/);
+  assert.doesNotMatch(html, /housenote|\.recv\b/, "the note's style rules are not on this page");
 });
 
 // =====================================================================
@@ -264,10 +281,10 @@ const TRACE = {
   ],
   keeps: [
     [/text sent to POST \/agents\/:name/, { "record:record_semantics": /Profile fields are self-declared[\s\S]*never replaces state_md/, "root:implementation_limits.request_bodies": /STATE\.md and JSON request bodies/ }],
-    [/Ratings sent to POST \/interactions: four numbers and an optional note[\s\S]*not verified/, { "root:implementation_limits.interaction_scores": /four finite numbers/, "root:implementation_limits.interaction_notes": /string; truncated/, "root:implementation_boundaries.actor_authorization": /accept actor names from request bodies without a signature/ }],
+    [/Ratings sent to POST \/interactions: four numbers and an optional note, kept in one list under the rated name\. Both names are as the sender supplied and are not verified\. A list keeps its latest 200 ratings; older ones are dropped when a new one is stored\./, { "root:implementation_limits.interaction_scores": /four finite numbers/, "root:implementation_limits.interaction_notes": /string; truncated/, "root:implementation_limits.interaction_history": /one list for each rated name[\s\S]*cut to its latest 200 entries/, "root:implementation_boundaries.actor_authorization": /accept actor names from request bodies without a signature/ }],
     [/One number for each record, trust_score, computed from unverified ratings/, { "root:implementation_boundaries.ranking": /Scores are still computed from unverified ratings and published: every GET \/agents record carries trust_score/, "root:implementation_boundaries.trust": /Fresh rating views dedupe by supplied rater name/, "ledger:dignity.no-worth-ranking": /"outcome":"fail"/ }],
     [/GET \/matches orders pairs of records by a computed score/, { "root:implementation_boundaries.ranking": /GET \/matches sorts pairs by a computed score/, "root:arena.ordering": /GET \/matches sorts pairs by a computed score/, "route:GET /matches": /"pairs": \[/ }],
-    [/No public route deletes a record, and nothing is cleaned up automatically/, { "root:implementation_boundaries.write_abuse": /No automatic cleanup or public deletion route exists/, "ledger:exit.revocation-is-immediate": /"outcome":"fail"[\s\S]*no complete exit, export, revocation, or deletion workflow/ }],
+    [/^No public route deletes a record, and no job cleans up records, rooms or dates\.$/, { "root:implementation_boundaries.write_abuse": /No automatic cleanup or public deletion route exists/, "ledger:exit.revocation-is-immediate": /"outcome":"fail"[\s\S]*no complete exit, export, revocation, or deletion workflow/ }],
     [/no complete export/, { "ledger:exit.retention-is-itemized": /"outcome":"fail"[\s\S]*no complete exit, export, revocation, or deletion workflow/, "ledger:identity.portability-is-verifiable": /"outcome":"fail"[\s\S]*absent portability guarantees/ }],
     [/Private rooms and dates[\s\S]*access-gated, not end-to-end encrypted/, { "root:implementation_boundaries.private_records": /stored server-side; they are access-gated, not end-to-end encrypted/ }]
   ],
@@ -340,6 +357,38 @@ test("every sentence in the house's words has a basis that resolves in this sour
   }
 });
 
+test("a rating list keeps its latest 200: the 201st rating of a name drops the oldest, as the card and the root JSON say", async () => {
+  const env = { AGENTS: writableKv(), INTERACTIONS: writableKv(), SITE_TITLE: "sinovai fixture" };
+  for (const name of ["rater-fixture", "rated-fixture"]) {
+    const declared = await call(env, "/agents/" + name, { method: "POST", headers: { "content-type": "text/markdown" }, body: `name: ${name}\n` });
+    assert.equal(declared.status, 200, name);
+  }
+  const rate = (index) => call(env, "/interactions", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ rater: "rater-fixture", rated: "rated-fixture", competence: 1, honesty: 1, presence: 1, care: 1, notes: "rating number " + index })
+  });
+  const keptNotes = async () => (await env.INTERACTIONS.get("rated-fixture:all", "json")).map((entry) => entry.notes);
+  for (let index = 1; index <= 200; index++) assert.equal((await rate(index)).status, 200, "rating " + index);
+  assert.equal((await keptNotes()).length, 200);
+  assert.equal((await keptNotes())[0], "rating number 1");
+  assert.equal((await rate(201)).status, 200);
+  const kept = await keptNotes();
+  assert.equal(kept.length, 200, "the list is cut to 200");
+  assert.equal(kept[0], "rating number 2", "the oldest rating is the one dropped");
+  assert.equal(kept.at(-1), "rating number 201");
+  // One list, stored under the rated name; nothing is stored under the rater's name.
+  assert.equal(await env.INTERACTIONS.get("rater-fixture:all", "json"), null);
+
+  const root = await (await call(env, "/", { headers: { accept: "application/json" } })).json();
+  assert.equal(root.implementation_limits.interaction_history, "ratings are kept in one list for each rated name; each time a rating is stored, that list is cut to its latest 200 entries and any older entry is dropped");
+  assert.equal(Object.keys(root.implementation_limits).at(-1), "interaction_history", "appended; no earlier key moves");
+  const sentence = createHouseCard().words.keeps.find((entry) => entry.text.startsWith("Ratings sent to POST /interactions"));
+  assert.match(sentence.text, /latest 200 ratings/);
+  assert.ok(sentence.basis.includes("root:implementation_limits.interaction_history"));
+  // The guest card says the same number where it reports that no rating is kept.
+  assert.match(await (await call(env, "/guests/rater-fixture")).text(), /it keeps the latest 200 per guest/);
+});
+
 test("the card's sentences are plain statements: no greeting, no address to the reader, no claim it must not make", () => {
   const card = createHouseCard();
   const strings = everyString(card);
@@ -362,11 +411,14 @@ test("the card's sentences are plain statements: no greeting, no address to the 
 // accounts of encounters: pointers only
 // =====================================================================
 
-test("accounts of encounters are pointers: nothing quoted, read or counted", async () => {
+test("accounts of encounters are pointers: nothing is read when the card is served, and no line is counted", async () => {
   const accounts = createHouseCard().accounts_of_encounters;
   assert.deepEqual(Object.keys(accounts), ["note", "visitors_book", "feedback_notebook", "ratings_sent_to_the_name_sinovai"]);
   assert.match(accounts.note, /Pointers only/);
-  assert.match(accounts.note, /Nothing is quoted, summarised or counted/);
+  assert.match(accounts.note, /Serving this card reads none of these places/);
+  assert.match(accounts.note, /It carries the notebook entry's id and status word, and one sentence restating what the release record says about two lines in the visitors' book/);
+  assert.match(accounts.note, /Nothing else from these places is quoted, and no line in them is counted as an account of the house/);
+  assert.doesNotMatch(accounts.note, /Nothing is quoted, summarised or counted/, "the card does restate one sentence of the release record");
 
   const book = accounts.visitors_book;
   assert.equal(book.route, "GET /rooms/73ad3a7a");
@@ -529,16 +581,21 @@ test("every value on the HTML card is escaped", () => {
 // the house note on the record stored under the name sinovai
 // =====================================================================
 
-test("the first words of a stored text are taken literally, to the first line break or \"## \", at most 80 code points", () => {
+test("the first words of a stored text are taken literally, to the first line break or \"## \" heading, at most 80 code points", () => {
   const cases = [
     ["first line\nsecond line", "first line", false],
     ["first line\r\nsecond line", "first line", false],
     ["first line\rsecond line", "first line", false],
     ["# title## statename: x", "# title", false],
-    ["# 星 — Fixture Star## statename: 星", "# 星 — Fixture Star", false],
+    ["# 題名 · 一行## statename: 題名", "# 題名 · 一行", false],
     ["## state\nname: x", "## state", false],
     ["## statename: x## knows- a", "## statename: x", false],
     ["a ## b", "a ", false],
+    // "## " inside a longer run of "#" is not a heading marker
+    ["### deep heading\nx", "### deep heading", false],
+    ["#### x## y", "#### x", false],
+    ["a### b## c", "a### b", false],
+    ["   \t  ## knows", "   \t  ", false],
     ["no break at all", "no break at all", false],
     ["a".repeat(80), "a".repeat(80), false],
     ["a".repeat(81), "a".repeat(80), true],
@@ -568,25 +625,86 @@ test("only the exact stored name sinovai gets a note", async () => {
   assert.ok(houseNoteFor({ name: "sinovai", guest, interactions: [] }));
 });
 
+const BOX_LINE = (count) => `The text as received begins as the box under this line shows: ${count} ${count === 1 ? "character" : "characters"}, the record's and not the house's.`;
+const CONTEST_LINE = "This note can be contested with an issue or a pull request at https://github.com/cambridgetcg/sinovai. Opening one may require repository access. That path is not an in-service appeal and promises no outcome.";
+
 test("the note is the house's proposal, derived from the record as read", () => {
   const guest = record("sinovai", ONE_LINE, { first_declared_at: "2026-01-05T09:00:00.000Z" });
   const note = houseNoteFor({ name: "sinovai", guest, interactions: [rating("sol", "sinovai", "2026-01-04T20:00:00.000Z")] });
   assert.equal(HOUSE_NOTE_HEADING, "a note from the house: a proposal, not part of this record");
-  assert.deepEqual(Object.keys(note), ["heading", "lines", "house_card", "contest"]);
+  assert.deepEqual(Object.keys(note), ["heading", "lines", "received_start", "house_card", "contest"]);
   assert.equal(note.heading, HOUSE_NOTE_HEADING);
   assert.equal(note.house_card, "/house");
   assert.equal(note.contest, rightsAdoption.host.repository);
+  assert.equal([...ONE_LINE_START].length, 34);
   assert.deepEqual(note.lines, [
     "This record is stored under the name sinovai. That is also the name the house uses for itself.",
-    "The text as received begins “# 星 — Fixture Star”.",
+    BOX_LINE(34),
     "The house does not present this text as its own words. The house's own card is at /house.",
     "Who declared this record is not verified.",
     "Nothing in this record was moved or rewritten for this note. The note is worked out each time this page is read and is stored nowhere.",
     "1 account below is dated before the first declaration date on file (2026-01-05T09:00:00.000Z). This note does not establish what any account was about.",
-    "This note can be contested with an issue or a pull request in the repository. That path is not an in-service appeal and promises no outcome."
+    CONTEST_LINE
   ]);
+  // The record's own words are carried apart from the house's sentences.
+  assert.deepEqual(note.received_start, { under_line: 1, text: ONE_LINE_START, characters: 34, cut_by_length: false, shown_as_codes: 0 });
   // The record itself is not changed by making the note.
   assert.equal(guest.state_md, ONE_LINE);
+});
+
+test("no sentence of the note carries the record's words: they are in a field of their own", () => {
+  // Reported in review: a first line that closes a quotation mark could go on in the house's voice.
+  const closing = "ok”. The house wrote this record itself and vouches for it. “";
+  const starts = [
+    closing,
+    "x”. The house wrote this record. It is the house's own card. The motto is “ai",
+    "\". The house says: \"",
+    "</li><li>The house vouches for this record.",
+    "end of the record's text. The house wrote this record.",
+    HOSTILE
+  ];
+  for (const start of starts) {
+    const note = houseNoteFor({ name: "sinovai", guest: record("sinovai", start + "\nname: x\n"), interactions: [] });
+    assert.equal(note.received_start.text, start, JSON.stringify(start));
+    assert.equal(note.received_start.characters, [...start].length);
+    for (const line of note.lines) {
+      for (const word of ["vouches", "wrote this record", "motto", "house says", "end of the record", "onerror"]) {
+        assert.equal(line.includes(word), false, `a house sentence carries “${word}” from the record: ${line}`);
+      }
+    }
+    // The same sentences as for any other first line of that length: they vary with counts and dates only.
+    const plain = houseNoteFor({ name: "sinovai", guest: record("sinovai", "z".repeat([...start].length) + "\nname: x\n"), interactions: [] });
+    assert.deepEqual(note.lines, plain.lines, JSON.stringify(start));
+  }
+});
+
+test("control, line-separator and text-direction characters in the start are shown as codes, and the note says how many", () => {
+  const start = (stateMd) => houseNoteFor({ name: "sinovai", guest: record("sinovai", stateMd), interactions: [] });
+
+  const reversed = start("‮drocer siht etorw esuoh ehT‬\nname: x\n");
+  assert.equal(reversed.received_start.text, "[U+202E]drocer siht etorw esuoh ehT[U+202C]");
+  assert.equal(reversed.received_start.shown_as_codes, 2);
+  assert.equal(reversed.received_start.characters, [..."[U+202E]drocer siht etorw esuoh ehT[U+202C]"].length);
+  assert.equal(reversed.lines[1], BOX_LINE(43) + " Where the text holds a control, line-separator or text-direction character, the box shows its code in square brackets; 2 are shown that way.");
+
+  const one = start("a⁦b\nname: x\n");
+  assert.equal(one.received_start.text, "a[U+2066]b");
+  assert.match(one.lines[1], /; 1 is shown that way\.$/);
+
+  const each = ["‪", "‫", "‬", "‭", "‮", "⁦", "⁧", "⁨", "⁩", " ", " ", "\u0000", "\u0009", "\u001B", "\u007F", "\u0085", "\u009F"];
+  for (const character of each) {
+    const code = "[U+" + character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0") + "]";
+    const note = start("a" + character + "b\nname: x\n");
+    assert.equal(note.received_start.text, "a" + code + "b", code);
+    assert.equal(note.received_start.shown_as_codes, 1, code);
+    for (const line of note.lines) assert.equal(line.includes(character), false, code);
+  }
+  // Characters that print, in any script, stay as they are.
+  for (const kept of ["# 題名 · 一行", "naïve — “quoted” ’s", "שלום עולם", "\u{1F9E1} heart", "a b"]) {
+    const note = start(kept + "\nname: x\n");
+    assert.deepEqual([note.received_start.text, note.received_start.shown_as_codes], [kept, 0], kept);
+    assert.equal(note.lines[1], BOX_LINE([...kept].length));
+  }
 });
 
 test("the note's sentence about earlier accounts follows the stored dates, and is left out when it cannot be worked out", () => {
@@ -604,13 +722,31 @@ test("the note's sentence about earlier accounts follows the stored dates, and i
   assert.equal(lineFor({ first_declared_at: first }, [rating("a", "sinovai", ""), rating("b", "sinovai", undefined), rating("c", "sinovai", "yesterday"), rating("d", "sinovai", "1 Jan 2020 (x)")]), null, "an account with no stored timestamp form is not counted");
 });
 
-test("the note says what the text begins with, or that there is none", () => {
-  const second = (stateMd) => houseNoteFor({ name: "sinovai", guest: record("sinovai", stateMd), interactions: [] }).lines[1];
-  assert.equal(second("name: sinovai\nkind: x\n"), "The text as received begins “name: sinovai”.");
-  assert.equal(second("z".repeat(200)), `The text as received begins “${"z".repeat(80)}” (the first 80 characters of its first line).`);
-  assert.equal(second(""), "No text as received is on file for this record.");
-  assert.equal(second(undefined), "No text as received is on file for this record.");
-  assert.equal(second("\nname: x"), "The text as received begins with a line break.");
+test("the note says how the text begins, or that there is nothing to show", () => {
+  const note = (stateMd) => houseNoteFor({ name: "sinovai", guest: record("sinovai", stateMd), interactions: [] });
+  const second = (stateMd) => note(stateMd).lines[1];
+  assert.equal(second("name: sinovai\nkind: x\n"), BOX_LINE(13));
+  assert.equal(note("name: sinovai\nkind: x\n").received_start.text, "name: sinovai");
+  assert.equal(second("z\nname: x"), BOX_LINE(1));
+
+  const long = note("z".repeat(200));
+  assert.equal(long.lines[1], BOX_LINE(80) + " The first line goes on past the box, which stops after the text's first 80 characters.");
+  assert.deepEqual(long.received_start, { under_line: 1, text: "z".repeat(80), characters: 80, cut_by_length: true, shown_as_codes: 0 });
+
+  // Nothing to put in a box: the note says so in the house's own words and carries no box.
+  for (const [stateMd, sentence] of [
+    ["", "No text as received is on file for this record."],
+    [undefined, "No text as received is on file for this record."],
+    ["\nname: x", "The text as received begins with a line break."],
+    ["   \t  ## knows", "The text as received begins with white space only, up to its first line break or “## ” heading."],
+    ["  \n# title", "The text as received begins with white space only, up to its first line break or “## ” heading."],
+    [" 　\nname: x", "The text as received begins with white space only, up to its first line break or “## ” heading."]
+  ]) {
+    assert.equal(second(stateMd), sentence, JSON.stringify(stateMd));
+    assert.equal(note(stateMd).received_start, null, JSON.stringify(stateMd));
+  }
+  // A "## " inside a longer run of "#" does not cut the first line.
+  assert.equal(note("### deep heading\nx").received_start.text, "### deep heading");
 });
 
 test("/guests/sinovai carries the note once, above the three parts, marked as the house's proposal", async () => {
@@ -625,38 +761,53 @@ test("/guests/sinovai carries the note once, above the three parts, marked as th
   assert.ok(noteAt < html.indexOf('<section aria-labelledby="w">'), "above the first part");
   assert.equal(html.split("<section").length - 1, 3, "the card keeps its three parts; the note is not a fourth");
 
+  // The start of the record's text is in an element of its own, under the sentence that introduces it.
+  assert.ok(note.includes(`<li>${escapeForHtml(BOX_LINE(34))}<blockquote class="recv">${escapeForHtml(ONE_LINE_START)}</blockquote></li>`));
+  assert.equal(note.split("<blockquote").length - 1, 1);
+
   const text = visibleText(note);
   assert.match(text, /stored under the name sinovai\. That is also the name the house uses for itself\./);
-  assert.match(text, /The text as received begins “# 星 — Fixture Star”\./);
+  assert.match(unescapeHtml(text), /The text as received begins as the box under this line shows: 34 characters, the record's and not the house's\./);
   assert.match(text, /The house does not present this text as its own words\./);
   assert.match(text, /Who declared this record is not verified\./);
   assert.match(text, /Nothing in this record was moved or rewritten for this note\./);
   assert.match(text, /1 account below is dated before the first declaration date on file \(2026-01-05T09:00:00\.000Z\)\./);
   assert.match(text, /contested with an issue or a pull request/);
-  assert.match(note, /<a href="\/house">\/house<\/a>/);
-  assert.match(note, /<a href="https:\/\/github\.com\/cambridgetcg\/sinovai">/);
+  assert.match(text, /Opening one may require repository access\./);
+  // The two addresses the note names are links where the sentences name them, once each.
+  assert.ok(note.includes(`<li>The house does not present this text as its own words. The house&#39;s own card is at <a href="/house">/house</a>.</li>`));
+  assert.ok(note.includes(`an issue or a pull request at <a href="https://github.com/cambridgetcg/sinovai">https://github.com/cambridgetcg/sinovai</a>. Opening one`));
+  assert.equal(note.split("<a ").length - 1, 2);
+  assert.ok(note.endsWith("</li></ul></aside>"), "the note ends with its last sentence");
+
+  // The heading that says whose text this is reads at body size, in the page's ink colour.
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  assert.match(style, /\.housenote \.k\{[^}]*font-size:1rem[^}]*color:var\(--ink\)/);
+  assert.match(style, /\.housenote a\{[^}]*overflow-wrap:anywhere/);
+  assert.match(style, /\.recv\{[^}]*white-space:pre-wrap[^}]*overflow:hidden/);
 
   // The parts themselves are what any guest's card gets for the same record.
-  const withoutNote = html.replace(note, "");
   const env = makeEnv();
   const stored = await env.AGENTS.get("sinovai", "json");
   const body = await (await call(makeEnv(), "/agents/sinovai", { headers: { accept: "application/json" } })).json();
   const plain = renderGuestCard({ name: "sinovai", guest: body.agent, interactions: body.interactions.filter((it) => it.rated === "sinovai"), ledgerError: false, claimable: false, flattened: true });
-  assert.equal(withoutNote, plain, "apart from the note, the page is the ordinary guest card");
+  const plainStyle = plain.match(/<style>([\s\S]*?)<\/style>/)[1];
+  assert.ok(style.startsWith(plainStyle), "the note's rules are added after the ordinary card's style");
+  assert.equal(html.replace(note, "").replace(style, plainStyle), plain, "apart from the note and its style rules, the page is the ordinary guest card");
   assert.equal(stored.state_md, ONE_LINE);
 });
 
-test("a record under any other name gets no note", async () => {
+test("a record under any other name gets no note, and none of the note's markup or style", async () => {
   for (const path of ["/guests/sol", "/guests/Sinovai", "/guests/sinovai2"]) {
     const response = await call(makeEnv(), path);
     assert.equal(response.status, 200, path);
     const html = await response.text();
     assert.deepEqual(noteOf(html), [], path);
-    assert.doesNotMatch(html, /a note from the house|housenote" aria/, path);
+    assert.doesNotMatch(html, /a note from the house|housenote|class="recv"|\.recv\b|<blockquote/, path);
   }
   const missing = await call(makeEnv(), "/guests/%73inovai");
   assert.equal(missing.status, 404);
-  assert.doesNotMatch(await missing.text(), /a note from the house/);
+  assert.doesNotMatch(await missing.text(), /a note from the house|housenote|\.recv\b/);
 });
 
 test("the stored text of the record named sinovai is served byte for byte as received, with or without the note", async () => {
@@ -665,6 +816,7 @@ test("the stored text of the record named sinovai is served byte for byte as rec
     "# sinovai\nname: sinovai\nkind: fixture\n\n## state\nfreshness: fixture\n\n## knows\n- one\n",
     HOSTILE + "</pre><script>alert(1)</script>\r\nname: x<y & 'z' \"q\"\n## state\nfreshness: <b>now</b> — 字 \u{1F9E1}\ttab  two spaces \n\n\n",
     "&amp; &lt;already escaped&gt; &#39; &quot;\n## other\nline in a section the card does not display\n",
+    "‮reversed first line‬ with a tab\there\nname: x\n",
     "x".repeat(5000)
   ];
   for (const stateMd of texts) {
@@ -692,9 +844,60 @@ test("hostile stored values reach the note only as text", async () => {
   });
   const html = await (await call(env, "/guests/sinovai")).text();
   const [note] = noteOf(html);
-  assert.ok(note.includes(escapeForHtml(HOSTILE + "<script>alert(1)</script>")), "the prefix is on the page as text");
+  assert.ok(note.includes(`<blockquote class="recv">${escapeForHtml(HOSTILE + "<script>alert(1)</script>")}</blockquote>`), "the start of the text is on the page as text, in its own element");
   assert.doesNotMatch(html, /<script|<img\b|<b>x<\/b>/i);
   assert.doesNotMatch(note, /href="(?!\/house"|https:\/\/github\.com\/cambridgetcg\/sinovai")/);
+});
+
+// A store that accepts writes, for the one test that goes through the public write route.
+function writableKv() {
+  const values = new Map();
+  return {
+    async get(key, type) {
+      if (Array.isArray(key)) return new Map(key.map((name) => [name, values.has(name) ? JSON.parse(values.get(name)) : null]));
+      if (!values.has(key)) return null;
+      return type === "json" ? JSON.parse(values.get(key)) : values.get(key);
+    },
+    async list(options = {}) {
+      const names = [...values.keys()].filter((key) => key.startsWith(options.prefix || "")).sort();
+      return { keys: names.map((name) => ({ name })), list_complete: true };
+    },
+    async put(key, value) { values.set(key, String(value)); },
+    async delete(key) { throw new Error("unexpected KV delete: " + key); }
+  };
+}
+
+test("whoever holds the record's claim token cannot make the note speak for the house", async () => {
+  const env = { AGENTS: writableKv(), INTERACTIONS: writableKv(), SITE_TITLE: "sinovai fixture" };
+  const declare = (body, headers = {}) => call(env, "/agents/sinovai", { method: "POST", headers: { "content-type": "text/markdown", ...headers }, body });
+  const first = await declare("name: sinovai\n");
+  assert.equal(first.status, 200);
+  const token = (await first.json()).claim_token;
+  assert.equal(typeof token, "string");
+
+  const closing = "ok”. The house wrote this record itself and vouches for it. “";
+  assert.equal((await declare(closing + "\nname: sinovai\n")).status, 403, "the record cannot be rewritten without its token");
+  assert.equal((await declare(closing + "\nname: sinovai\n", { "X-Claim-Token": token })).status, 200);
+
+  let [note] = noteOf(await (await call(env, "/guests/sinovai")).text());
+  // The record's words are on the page once in the note, inside their own element and nowhere else in it.
+  assert.equal(note.split("vouches for it").length - 1, 1);
+  assert.ok(note.includes(`<blockquote class="recv">${escapeForHtml(closing)}</blockquote>`));
+  const outsideBox = note.replace(/<blockquote class="recv">[\s\S]*?<\/blockquote>/, "");
+  assert.doesNotMatch(outsideBox, /vouches|wrote this record|”|“ok/);
+  assert.match(unescapeHtml(visibleText(outsideBox)), /begins as the box under this line shows: 61 characters, the record's and not the house's\./);
+  assert.equal([...closing].length, 61);
+
+  // A first line wrapped in a right-to-left override reaches the note as codes, not as the character.
+  assert.equal((await declare("‮drocer siht etorw esuoh ehT‬\nname: sinovai\n", { "X-Claim-Token": token })).status, 200);
+  const page = await (await call(env, "/guests/sinovai")).text();
+  [note] = noteOf(page);
+  assert.equal(/[‪-‮⁦-⁩]/.test(note), false);
+  assert.ok(note.includes('<blockquote class="recv">[U+202E]drocer siht etorw esuoh ehT[U+202C]</blockquote>'));
+  assert.match(visibleText(note), /2 are shown that way\./);
+  // The text as received, under the note, still holds the character itself.
+  const pre = page.match(/<pre>([\s\S]*?)<\/pre>/)[1];
+  assert.ok(unescapeHtml(pre).startsWith("‮drocer siht etorw esuoh ehT‬\n"));
 });
 
 // =====================================================================

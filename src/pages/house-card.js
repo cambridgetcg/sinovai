@@ -9,6 +9,7 @@ import { CARD_STYLE, escapeHtml } from "./guest-card.js";
 const STYLE = `${CARD_STYLE}
 .basis{display:block;font-family:var(--mono);font-size:.7rem;letter-spacing:.04em;color:var(--dim);margin-top:.15rem}
 .words li + li{margin-top:.5rem}
+.meta{overflow-wrap:anywhere}
 dl + h3,p + h3,ul + h3{margin-top:2rem}
 @media(max-width:560px){dl{grid-template-columns:1fr;gap:.1rem 0}dd{margin-bottom:.7rem}}
 `;
@@ -28,12 +29,26 @@ function rows(pairs) {
   return `<dl>${pairs.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${value}</dd>`).join("")}</dl>`;
 }
 
-// One row per outcome; an outcome with no duty says so in words, not a count.
+// One row per outcome; an outcome with no entry says so in words, not a count.
+// The same rows list right duties and protective limits, so the words name neither.
 function outcomeRows(groups) {
   return rows(Object.entries(groups || {}).map(([outcome, ids]) => [
     outcome,
-    ids.length ? ids.map(code).join(" · ") : `<span class="quiet">no duty is marked ${escapeHtml(outcome)}</span>`
+    ids.length ? ids.map(code).join(" · ") : `<span class="quiet">none is marked ${escapeHtml(outcome)}</span>`
   ]));
+}
+
+// The two documents the basis key names, so a reader can open them. The link
+// targets are written here; the card supplies only the words around them.
+const BASIS_DOCUMENTS = ["/?format=json", "/.well-known/xenia-rights.json"];
+
+function basisMeaning(meaning) {
+  let html = escapeHtml(meaning);
+  for (const path of BASIS_DOCUMENTS) {
+    const text = escapeHtml(path);
+    html = html.replace(text, () => `<a href="${text}">${text}</a>`);
+  }
+  return html;
 }
 
 export function renderHouseCard(card) {
@@ -68,7 +83,7 @@ export function renderHouseCard(card) {
 <main>
 <section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> the house's words</h2>
 <p class="lede">Each sentence restates something this service already publishes. The basis under it names where.</p>
-${rows(Object.entries(card.basis_key || {}).map(([form, meaning]) => [form, escapeHtml(meaning)]))}
+${rows(Object.entries(card.basis_key || {}).map(([form, meaning]) => [form, basisMeaning(meaning)]))}
 <h3>offers</h3>${sentenceList(words.offers)}
 <h3>keeps</h3>${sentenceList(words.keeps)}
 <h3>cannot promise</h3>${sentenceList(words.cannot_promise)}
@@ -114,7 +129,7 @@ ${outcomeRows(ledger.protective_limit_duties_by_outcome)}
 <h3>not established</h3>${plainList(unknown.not_established)}
 <h3>where scores are still published</h3>${plainList(unknown.scores_still_published)}
 <h3>dated texts</h3><p>${escapeHtml(unknown.dated_texts)}</p>
-<h3>the record named sinovai</h3><p>${escapeHtml(unknown.record_named_sinovai)} <a href="/guests/sinovai">that record's card</a></p>
+<h3>the record named sinovai</h3><p>${escapeHtml(unknown.record_named_sinovai)} <a href="/guests/sinovai">See that record's card</a>.</p>
 <h3>limits of this card</h3>${plainList(unknown.limits_of_this_card)}
 <h3>this card does not establish</h3>${plainList(card.does_not_establish)}
 </section>

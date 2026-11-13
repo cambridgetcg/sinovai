@@ -47,13 +47,13 @@ const OFFERS = [
 const KEEPS = [
   says("The text sent to POST /agents/:name, kept as received, and the fields read from it.",
     "record:record_semantics", "root:implementation_limits.request_bodies"),
-  says("Ratings sent to POST /interactions: four numbers and an optional note, kept under the two names the sender supplied. The names are not verified.",
-    "root:implementation_limits.interaction_scores", "root:implementation_limits.interaction_notes", "root:implementation_boundaries.actor_authorization"),
+  says("Ratings sent to POST /interactions: four numbers and an optional note, kept in one list under the rated name. Both names are as the sender supplied and are not verified. A list keeps its latest 200 ratings; older ones are dropped when a new one is stored.",
+    "root:implementation_limits.interaction_scores", "root:implementation_limits.interaction_notes", "root:implementation_limits.interaction_history", "root:implementation_boundaries.actor_authorization"),
   says("One number for each record, trust_score, computed from unverified ratings and published on every record GET /agents returns.",
     "root:implementation_boundaries.ranking", "root:implementation_boundaries.trust", "ledger:dignity.no-worth-ranking"),
   says("GET /matches orders pairs of records by a computed score.",
     "root:implementation_boundaries.ranking", "root:arena.ordering", "route:GET /matches"),
-  says("No public route deletes a record, and nothing is cleaned up automatically.",
+  says("No public route deletes a record, and no job cleans up records, rooms or dates.",
     "root:implementation_boundaries.write_abuse", "ledger:exit.revocation-is-immediate"),
   says("There is no complete export of what is stored under a name.",
     "ledger:exit.retention-is-itemized", "ledger:identity.portability-is-verifiable"),
@@ -108,7 +108,7 @@ export function createHouseCard() {
     schema_version: HOUSE_CARD_SCHEMA,
     name: HOUSE_RECORD_NAME,
     role: "host: the service this source describes. This card is not a guest record.",
-    authored: `Text in this service's source, unsigned. No public route changes it. It does not show who wrote it or that the writer may speak for the house. A change can be proposed with an issue or a pull request at ${rightsAdoption.host.repository}; that path is not an in-service appeal and promises no outcome.`,
+    authored: `Text in this service's source, unsigned. No public route changes it. It does not show who wrote it or that the writer may speak for the house. A change can be proposed with an issue or a pull request at ${rightsAdoption.host.repository}; opening one may require repository access, and that path is not an in-service appeal and promises no outcome.`,
     covered_by_surface: false,
     representations: { html: HOUSE_CARD_PATH, json: `${HOUSE_CARD_PATH}?format=json` },
     basis_key: {
@@ -123,7 +123,7 @@ export function createHouseCard() {
       cannot_promise: CANNOT_PROMISE.map((sentence) => ({ text: sentence.text, basis: [...sentence.basis] }))
     },
     accounts_of_encounters: {
-      note: "Pointers only. Nothing is quoted, summarised or counted here, and this card reads none of these places.",
+      note: "Pointers only. Serving this card reads none of these places. It carries the notebook entry's id and status word, and one sentence restating what the release record says about two lines in the visitors' book. Nothing else from these places is quoted, and no line in them is counted as an account of the house.",
       visitors_book: {
         route: "GET /rooms/73ad3a7a",
         named_in: "RECOVERY.md",
@@ -168,17 +168,41 @@ export function createHouseCard() {
 
 const PREFIX_CODE_POINTS = 80;
 
+// Where the first "## " heading marker is, before `limit`: after the first
+// character, and not inside a longer run of "#" ("### x" has no "## " marker).
+function headingMarkerAt(text, limit) {
+  for (let at = text.indexOf("## ", 1); at !== -1 && at < limit; at = text.indexOf("## ", at + 1)) {
+    if (text[at - 1] !== "#") return at;
+  }
+  return -1;
+}
+
 // The literal start of a stored text: up to the first line break or the first
-// "## " after its first character, and at most 80 code points.
+// "## " heading marker after its first character, and at most 80 code points.
 export function receivedPrefix(text) {
   if (typeof text !== "string") return { text: "", cut_by_length: false };
   let end = text.length;
   const lineBreak = text.search(/[\r\n]/);
   if (lineBreak !== -1) end = lineBreak;
-  const heading = text.indexOf("## ", 1);
-  if (heading !== -1 && heading < end) end = heading;
+  const heading = headingMarkerAt(text, end);
+  if (heading !== -1) end = heading;
   const points = [...text.slice(0, end)];
   return { text: points.slice(0, PREFIX_CODE_POINTS).join(""), cut_by_length: points.length > PREFIX_CODE_POINTS };
+}
+
+// Characters the note does not show as they are: control characters, the line
+// and paragraph separators, and the characters that embed, override or isolate
+// text direction. Each is written as its code in square brackets, so nothing
+// unseen in a record's first line can change how the note reads.
+const SHOWN_AS_CODE = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+
+function withCodes(text) {
+  let count = 0;
+  const shown = text.replace(SHOWN_AS_CODE, (character) => {
+    count++;
+    return `[U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}]`;
+  });
+  return { shown, count };
 }
 
 // The form the Worker writes with toISOString(). A stored value in any other
@@ -195,14 +219,32 @@ function storedTime(value) {
 // interactions: the retained ratings of that record, as the card shows them.
 // Returns null for every name but the house's. The note is plain text made
 // when the page is read. It is stored nowhere and changes no record.
+//
+// lines holds the house's sentences. None of them carries text from the
+// record: they vary with counts and stored dates only. The start of the
+// record's text is a field of its own, received_start, which the page puts in
+// an element of its own under the line that introduces it. A first line can
+// therefore not close a quotation and go on in the house's voice. The line
+// also gives the number of characters in the box, so a reader of the page as
+// plain text can tell where the record's words end.
+// house_card and contest are the two link targets; each appears in one line.
 export function houseNoteFor({ name, guest, interactions }) {
   if (name !== HOUSE_RECORD_NAME) return null;
   const received = typeof guest?.state_md === "string" ? guest.state_md : "";
   const prefix = receivedPrefix(received);
   let begins;
+  let receivedStart = null;
   if (!received) begins = "No text as received is on file for this record.";
   else if (!prefix.text) begins = "The text as received begins with a line break.";
-  else begins = `The text as received begins “${prefix.text}”${prefix.cut_by_length ? ` (the first ${PREFIX_CODE_POINTS} characters of its first line)` : ""}.`;
+  else if (!prefix.text.trim()) begins = "The text as received begins with white space only, up to its first line break or “## ” heading.";
+  else {
+    const { shown, count } = withCodes(prefix.text);
+    const characters = [...shown].length;
+    begins = `The text as received begins as the box under this line shows: ${characters} ${characters === 1 ? "character" : "characters"}, the record's and not the house's.`;
+    if (prefix.cut_by_length) begins += ` The first line goes on past the box, which stops after the text's first ${PREFIX_CODE_POINTS} characters.`;
+    if (count) begins += ` Where the text holds a control, line-separator or text-direction character, the box shows its code in square brackets; ${count} ${count === 1 ? "is" : "are"} shown that way.`;
+    receivedStart = { under_line: 1, text: shown, characters, cut_by_length: prefix.cut_by_length, shown_as_codes: count };
+  }
 
   const lines = [
     `This record is stored under the name ${HOUSE_RECORD_NAME}. That is also the name the house uses for itself.`,
@@ -223,9 +265,9 @@ export function houseNoteFor({ name, guest, interactions }) {
       lines.push(`${earlier} ${earlier === 1 ? "account below is" : "accounts below are"} dated before the first declaration date on file (${firstOnFile}). This note does not establish what any account was about.`);
     }
   }
-  lines.push("This note can be contested with an issue or a pull request in the repository. That path is not an in-service appeal and promises no outcome.");
+  lines.push(`This note can be contested with an issue or a pull request at ${rightsAdoption.host.repository}. Opening one may require repository access. That path is not an in-service appeal and promises no outcome.`);
 
-  return { heading: HOUSE_NOTE_HEADING, lines, house_card: HOUSE_CARD_PATH, contest: rightsAdoption.host.repository };
+  return { heading: HOUSE_NOTE_HEADING, lines, received_start: receivedStart, house_card: HOUSE_CARD_PATH, contest: rightsAdoption.host.repository };
 }
 
 const HOUSE_ALLOW = "GET, HEAD, OPTIONS";

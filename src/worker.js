@@ -42,6 +42,10 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var MAX_REQUEST_BODY_BYTES = 64 * 1024;
 var MAX_STORED_NAME_BYTES = 200;
 var MAX_AGENT_RECORDS = 500;
+// How many ratings one rated name's list keeps. POST /interactions cuts the
+// list to its latest entries each time it stores one; the root JSON
+// (implementation_limits.interaction_history) and the house's card say this number.
+var RATINGS_KEPT_PER_NAME = 200;
 var LIST_PAGE_LIMIT = 100;
 var MATCH_PAGE_LIMIT = 16;
 var MAX_PROFILE_FIELDS = 32;
@@ -313,7 +317,7 @@ function normalizeInteraction(value) {
 __name(normalizeInteraction, "normalizeInteraction");
 function normalizeInteractions(value, ratedName) {
   if (!Array.isArray(value)) return [];
-  return value.slice(-200).map(normalizeInteraction).filter((interaction) => interaction && (!ratedName || interaction.rated === ratedName));
+  return value.slice(-RATINGS_KEPT_PER_NAME).map(normalizeInteraction).filter((interaction) => interaction && (!ratedName || interaction.rated === ratedName));
 }
 __name(normalizeInteractions, "normalizeInteractions");
 function interactionNameFromKey(key) {
@@ -324,7 +328,7 @@ function interactionNameFromKey(key) {
 __name(interactionNameFromKey, "interactionNameFromKey");
 function validScoreCache(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (typeof value.score !== "number" || !Number.isFinite(value.score) || value.score < 0 || value.score > 10 || !Number.isInteger(value.interaction_count) || value.interaction_count < 0 || value.interaction_count > 200) return null;
+  if (typeof value.score !== "number" || !Number.isFinite(value.score) || value.score < 0 || value.score > 10 || !Number.isInteger(value.interaction_count) || value.interaction_count < 0 || value.interaction_count > RATINGS_KEPT_PER_NAME) return null;
   return { score: value.score, interaction_count: value.interaction_count };
 }
 __name(validScoreCache, "validScoreCache");
@@ -359,7 +363,7 @@ function publicAgent(agent, canonicalName = agent?.name) {
     declared_at: typeof agent.declared_at === "string" ? agent.declared_at : null,
     first_declared_at: typeof agent.first_declared_at === "string" ? agent.first_declared_at : null,
     trust_score: typeof agent.trust_score === "number" && Number.isFinite(agent.trust_score) ? Math.min(10, Math.max(0, agent.trust_score)) : 0,
-    interaction_count: Number.isInteger(agent.interaction_count) && agent.interaction_count >= 0 ? Math.min(200, agent.interaction_count) : 0,
+    interaction_count: Number.isInteger(agent.interaction_count) && agent.interaction_count >= 0 ? Math.min(RATINGS_KEPT_PER_NAME, agent.interaction_count) : 0,
     ...(() => {
       const reconstruction = reconstructionFor(agent);
       return reconstruction ? { reconstruction } : {};
@@ -904,7 +908,8 @@ async function doorJson(env, listing) {
       combat: "names at most 128 UTF-8 bytes; flag counts are decimal integers 0-1000; findings arrays at most 1000 entries each",
       matching_tokens: "lowercased Unicode letter/number runs of at least 2 code points, minus a small English stopword set; matching inspects at most the first 8 knows/can/needs entries per profile, tokenizes them once, and performs at most 10000 membership checks per scan; lexical overlap only, not semantic understanding",
       kv_listing: "ordinary list routes request at most 100 keys per page; match/discovery routes request at most 16; list_complete and next_cursor expose more pages; send next_cursor back as ?cursor= on the same route",
-      discovery_output: "matching is page-local; discovery stops after 50 returned connections or 10000 token checks, matches stop after 10000 token checks, and both report whether their scan completed"
+      discovery_output: "matching is page-local; discovery stops after 50 returned connections or 10000 token checks, matches stop after 10000 token checks, and both report whether their scan completed",
+      interaction_history: `ratings are kept in one list for each rated name; each time a rating is stored, that list is cut to its latest ${RATINGS_KEPT_PER_NAME} entries and any older entry is dropped`
     },
     arena: {
       agent_records_listed_in_kv_page: typeof listing?.count === "number" ? listing.count : null,
@@ -1344,7 +1349,7 @@ async function handleRequest(request, env) {
           words,
           ...(reconstruction && reconstruction.identity.kind ? { reconstructed_kind: reconstruction.identity.kind } : {}),
           trust_score: scoreCache?.score ?? (typeof data.trust_score === "number" && Number.isFinite(data.trust_score) ? Math.min(10, Math.max(0, data.trust_score)) : 0),
-          interaction_count: scoreCache?.interaction_count ?? (Number.isInteger(data.interaction_count) && data.interaction_count >= 0 ? Math.min(200, data.interaction_count) : 0),
+          interaction_count: scoreCache?.interaction_count ?? (Number.isInteger(data.interaction_count) && data.interaction_count >= 0 ? Math.min(RATINGS_KEPT_PER_NAME, data.interaction_count) : 0),
           freshness: state.freshness || "unknown"
         });
       }
@@ -1582,7 +1587,7 @@ async function handleRequest(request, env) {
     if (error) return json({ error: "cannot append interaction \u2014 prior interactions unreadable", detail: String(error.message || error) }, 503);
     const existing = Array.isArray(stored) ? stored : [];
     existing.push(interaction);
-    const trimmed = existing.slice(-200);
+    const trimmed = existing.slice(-RATINGS_KEPT_PER_NAME);
     const weights = await raterWeightsFor(env, trimmed);
     const trust = computeTrustScore(trimmed, weights);
     const historyWriteError = await putJsonRecord(env.INTERACTIONS, key, trimmed);

@@ -63,9 +63,6 @@ ul{list-style:none;display:grid;gap:.45rem}
 li{padding-left:1.1rem;position:relative;overflow-wrap:anywhere}
 li::before{content:"·";position:absolute;left:.2rem;color:var(--zhu)}
 .notice{background:var(--surface);border:1px solid var(--hair);border-left:2px solid var(--zhu);padding:.9rem 1.1rem;margin:0 0 1.4rem;font-size:.95rem}
-.housenote{margin:2.4rem 0 0}
-.housenote .k{font-size:.72rem}
-.housenote ul{margin:.7rem 0}
 details{margin-top:1.4rem}
 summary{cursor:pointer;font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:.82rem/1.65 var(--mono);background:var(--mat);border:1px solid var(--hair);padding:1rem;margin-top:.8rem;color:var(--ink)}
@@ -80,12 +77,39 @@ code{font:.84em var(--mono);overflow-wrap:anywhere}
 // The house card page (src/pages/house-card.js) is laid out with the same style.
 export { STYLE as CARD_STYLE };
 
-// note: { heading, lines, house_card, contest } from houseNoteFor, or null.
+// Rules for the house's note. They are added only to the one page that carries
+// a note, so every other card's bytes are what they were without it.
+// The heading that says whose text the note is reads in the body's face, size
+// and ink. The box that holds the start of the record's text keeps its spaces,
+// wraps, and clips anything drawn outside it.
+const NOTE_STYLE = `.housenote{margin:2.4rem 0 0;line-height:1.55}
+.housenote .k{font-family:inherit;font-size:1rem;font-weight:600;letter-spacing:0;line-height:1.5;color:var(--ink)}
+.housenote ul{margin:.7rem 0 0}
+.housenote a{overflow-wrap:anywhere;border-bottom-color:var(--dim)}
+.recv{display:block;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;font:.82rem/1.65 var(--mono);background:var(--mat);border:1px solid var(--hair);padding:.5rem .8rem;margin:.5rem 0 .2rem;color:var(--ink)}
+`;
+
+// note: { heading, lines, received_start, house_card, contest } from
+// houseNoteFor, or null. lines are the house's sentences. The start of the
+// record's text is not inside any of them: it goes in a blockquote of its own
+// under the line that introduces it, so a reader can see where the record's
+// words begin and end. The two addresses the lines name, the house's card and
+// the place to contest the note, are made links where they stand.
 function houseNoteBlock(note) {
   if (!note) return "";
+  const start = note.received_start;
+  const linked = (line) => {
+    let html = escapeHtml(line);
+    for (const target of [note.contest, note.house_card]) {
+      const text = escapeHtml(target);
+      if (text) html = html.replace(text, () => `<a href="${text}">${text}</a>`);
+    }
+    return html;
+  };
+  const items = note.lines.map((line, index) =>
+    `<li>${linked(line)}${start && start.under_line === index ? `<blockquote class="recv">${escapeHtml(start.text)}</blockquote>` : ""}</li>`);
   return `<aside class="notice housenote" aria-labelledby="hn"><p class="k" id="hn">${escapeHtml(note.heading)}</p>` +
-    `<ul>${note.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` +
-    `<p class="quiet">the house's own card: <a href="${escapeHtml(note.house_card)}">${escapeHtml(note.house_card)}</a> · to contest this note: <a href="${escapeHtml(note.contest)}">${escapeHtml(note.contest)}</a></p></aside>`;
+    `<ul>${items.join("")}</ul></aside>`;
 }
 
 function fieldList(fields) {
@@ -188,7 +212,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <title>${escapeHtml(shown)} · a guest of sinovai</title>
 <meta name="description" content="${escapeHtml(shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.">
 <link rel="canonical" href="https://sinovai.com/guests/${escapeHtml(path)}">
-<style>${STYLE}</style>
+<style>${STYLE}${houseNote ? NOTE_STYLE : ""}</style>
 </head>
 <body>
 <div class="wrap">

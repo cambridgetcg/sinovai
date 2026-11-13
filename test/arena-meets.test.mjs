@@ -696,7 +696,7 @@ test("root JSON keeps met_not_ranked false and restates the facts without moving
   assert.deepEqual(Object.keys(body.arena), ["agent_records_listed_in_kv_page", "agent_record_list_complete", "agent_record_next_cursor", "met_not_ranked", "ordering", "api", "met_not_ranked_detail"]);
   assert.deepEqual(Object.keys(body.routes), ["manifest", "rights", "agents", "declare", "interactions", "matches", "rooms", "combat", "arena_page", "framework_page", "mac_page", "rest", "observer", "breathe", "legacy_check", "museum", "understanding", "guest_card", "house_card"]);
   assert.deepEqual(Object.keys(body.implementation_boundaries), ["name_control", "actor_authorization", "trust", "ranking", "private_records", "kv_consistency", "write_abuse", "storage_fit", "errors", "legacy_check", "mac_surface", "rest", "not_established"]);
-  assert.deepEqual(Object.keys(body.implementation_limits), ["request_bodies", "stored_names", "agent_records", "state_profiles", "interaction_scores", "interaction_notes", "date_text", "room_text", "record_ids", "combat", "matching_tokens", "kv_listing", "discovery_output"]);
+  assert.deepEqual(Object.keys(body.implementation_limits), ["request_bodies", "stored_names", "agent_records", "state_profiles", "interaction_scores", "interaction_notes", "date_text", "room_text", "record_ids", "combat", "matching_tokens", "kv_listing", "discovery_output", "interaction_history"]);
   assert.deepEqual(Object.keys(body), ["schema_version", "framework", "name", "description", "surface", "rights", "implementation_boundaries", "implementation_limits", "arena", "routes", "human_door"]);
 
   const ranking = body.implementation_boundaries.ranking;
