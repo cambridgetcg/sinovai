@@ -144,8 +144,24 @@ The separately identified Surface documentation and host Covenant mirrors come
 from the already-installed, locked rc.1 and beta.4 packages. Runtime versions,
 `package-lock.json`, canonical schema identifiers, and `rights-adoption.json`
 are unchanged. A mirror's matching bytes are not proof of authorship, truth,
-consent, adoption, or conformance. These source-only changes require publication
-review before deployment, including review of the selected copied material.
+consent, adoption, or conformance.
+
+The page and the guide's `presenter` key state what [RECOVERY.md](RECOVERY.md)
+records about this presenter's release, as read on 2026-11-13. They replace a
+sentence that called the page a source-only candidate awaiting a publication
+check. The merge that added the presenter (`46b357c`, PR #17; its files arrive
+in commit `351a315`) was promoted to 100% of traffic at
+`2026-10-22T12:32:56.934Z`. Its source has changed since: `949fff9` added a
+canonical link, `06cc50a` added `no-transform` to HTML responses in
+`src/worker.js`, and the 2026-11-13 change wrote this description. For that
+release the record lists approval to land at `dc63547` after four review
+rounds, a separate adversarial review, the change landing byte-exact from a
+review dated 2026-09-30, and 54 of 54 GET and HEAD checks before promotion that
+included the page, its JSON guide, and the reader. It does not mention a
+publication or licence review of the copied documents, or a check that revision
+`7a6794e` is published upstream. This text is source: it cannot show which
+version or host is serving it. `test/xenia-dated-record.test.mjs` compares
+these facts with RECOVERY.md; it does not show that the record is accurate.
 
 The shared renderer is `src/pages/xenia.js`; `XENIA-PAGE.html` is a checked
 output, not a second authoring source. Source prose and its rendered adaptation
