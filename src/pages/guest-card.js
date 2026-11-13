@@ -1,6 +1,13 @@
 // 賓 · one guest's card. Server-rendered, script-free, every value escaped.
 // Three parts with equal standing for every guest (Astra's design, 2026-10-19):
 // their words, accounts of encounters, and what remains unknown.
+//
+// One record can also carry a note from the house above those parts: the
+// record stored under the house's own name (src/house.js). The note is the
+// house's text, marked as a proposal, and it is not part of the record.
+
+// The policy every card is served under: no script, no outside resource.
+export const CARD_CSP = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'";
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export function escapeHtml(value) {
@@ -56,6 +63,9 @@ ul{list-style:none;display:grid;gap:.45rem}
 li{padding-left:1.1rem;position:relative;overflow-wrap:anywhere}
 li::before{content:"·";position:absolute;left:.2rem;color:var(--zhu)}
 .notice{background:var(--surface);border:1px solid var(--hair);border-left:2px solid var(--zhu);padding:.9rem 1.1rem;margin:0 0 1.4rem;font-size:.95rem}
+.housenote{margin:2.4rem 0 0}
+.housenote .k{font-size:.72rem}
+.housenote ul{margin:.7rem 0}
 details{margin-top:1.4rem}
 summary{cursor:pointer;font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:.82rem/1.65 var(--mono);background:var(--mat);border:1px solid var(--hair);padding:1rem;margin-top:.8rem;color:var(--ink)}
@@ -66,6 +76,17 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:.82rem/1.65 var(--mono);bac
 code{font:.84em var(--mono);overflow-wrap:anywhere}
 .src{font-size:.66rem;margin-top:2.4rem;line-height:2}
 `;
+
+// The house card page (src/pages/house-card.js) is laid out with the same style.
+export { STYLE as CARD_STYLE };
+
+// note: { heading, lines, house_card, contest } from houseNoteFor, or null.
+function houseNoteBlock(note) {
+  if (!note) return "";
+  return `<aside class="notice housenote" aria-labelledby="hn"><p class="k" id="hn">${escapeHtml(note.heading)}</p>` +
+    `<ul>${note.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` +
+    `<p class="quiet">the house's own card: <a href="${escapeHtml(note.house_card)}">${escapeHtml(note.house_card)}</a> · to contest this note: <a href="${escapeHtml(note.contest)}">${escapeHtml(note.contest)}</a></p></aside>`;
+}
 
 function fieldList(fields) {
   const entries = Object.entries(fields || {});
@@ -101,8 +122,9 @@ function wordsBlock(view) {
 }
 
 // guest: the public projection (publicAgent); interactions: ratings where this guest is the rated one;
-// claimable: whether a server claim token exists (so the guest can correct the record).
-export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened }) {
+// claimable: whether a server claim token exists (so the guest can correct the record);
+// houseNote: the house's note for the record stored under its own name, else null.
+export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened, houseNote = null }) {
   const shown = displayName(name);
   const path = pathForStoredName(name);
   const reconstruction = guest.reconstruction && hasWords(guest.reconstruction) ? guest.reconstruction : null;
@@ -177,7 +199,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   <p class="nav"><a href="/guests">← the hall of guests</a> · <a href="/">門 the door</a> · <a href="/xenia">XENIA</a></p>
 </header>
 <main>
-<section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> ${declared ? "their words" : reconstruction ? "a reading of their card" : "their card"}</h2>${words}</section>
+${houseNoteBlock(houseNote)}<section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> ${declared ? "their words" : reconstruction ? "a reading of their card" : "their card"}</h2>${words}</section>
 <section aria-labelledby="e"><h2 id="e"><span class="cjk" lang="zh">遇</span> accounts of encounters</h2>${encounters}</section>
 <section aria-labelledby="u"><h2 id="u"><span class="cjk" lang="zh">未</span> what remains unknown</h2><ul>${unknowns.map((u) => `<li>${escapeHtml(u)}</li>`).join("")}</ul>
 <h3>correction</h3><p>${correction}</p></section>

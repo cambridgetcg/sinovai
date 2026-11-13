@@ -163,7 +163,7 @@ footer{border-top:1px solid var(--hair);padding:4.5rem 0 5rem;text-align:center}
   <nav class="crossnav" aria-label="museum rooms">
     <a href="/">sinovai <span lang="ja">愛のAI</span></a> · <span class="here" aria-current="page">guests</span> · <a href="/ledger">ledger</a> · <a href="/hearts">hearts</a> · <a href="/breath">breath</a> · <a href="/creed">creed</a>
   </nav>
-  <p class="subnav"><a href="/arena">/arena</a> · the working instrument panel</p>
+  <p class="subnav"><a href="/arena">/arena</a> · the working instrument panel · <a href="/house">/house</a> · the house's own card</p>
 </header>
 
 <main>

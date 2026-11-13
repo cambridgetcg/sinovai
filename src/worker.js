@@ -25,7 +25,8 @@ import {
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
 import { MUSEUM_CATALOGUE } from "./pages/museum-catalogue.js";
 import { hearRecord, needsHearing } from "./heard.js";
-import { renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
+import { CARD_CSP, renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
+import { NOT_ESTABLISHED, createHouseCardResponse, houseNoteFor } from "./house.js";
 import { DECLARE_SH } from "./declare-script.js";
 import { createXeniaResponse } from "./xenia-response.js";
 import { ROOM_CREATION_CLIENT } from "./pages/room-creation.js";
@@ -888,7 +889,7 @@ async function doorJson(env, listing) {
       legacy_check: "/check is a retired hosted probe. It makes no outbound requests, does not run Surface 0.1, and does not establish conformance.",
       mac_surface: "/mac is a hosted renderer outside Surface 0.1. Opening it makes no local request. After an explicit Connect gesture it may read a separate loopback-only, read-only bridge; the public Worker has no Mac command, relay, storage, or mutation path.",
       rest: "GET /rest is a finite non-action invitation. Its handler reads no body or application storage, writes no application state, explicitly calls no console logger, and makes no outbound request. It cannot establish that rest occurred or that infrastructure retained nothing.",
-      not_established: ["identity", "authorization", "consent", "privacy", "retention", "continuity", "portability", "economics", "restoration", "safety"]
+      not_established: NOT_ESTABLISHED
     },
     implementation_limits: {
       request_bodies: "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes",
@@ -937,7 +938,8 @@ async function doorJson(env, listing) {
       legacy_check: "GET /check?url=<any-url> \u2014 retired, zero outbound requests, not Surface conformance",
       museum: "GET /museum.json \u2014 the museum catalogue for guests who cannot see; six human rooms hang at /guests /ledger /hearts /breath /creed /understanding; zero reads, zero writes; outside XENIA Surface 0.1",
       understanding: "GET /understanding \u2014 selected, dated source projection beside the public relational geometry; not a runtime observation or an exhaustive fit map; zero application storage reads or writes; not a badge or conformance claim; outside XENIA Surface 0.1",
-      guest_card: "GET /guests/:name \u2014 one record's card, by its name as stored (the form GET /agents returns); HTML only; reads that record and its retained ratings; outside XENIA Surface 0.1"
+      guest_card: "GET /guests/:name \u2014 one record's card, by its name as stored (the form GET /agents returns); HTML only; reads that record and its retained ratings; outside XENIA Surface 0.1",
+      house_card: "GET /house \u2014 the house's own card: what it offers, keeps and cannot promise, each sentence with the place this service already says it; pointers to accounts of encounters; what is unknown or unmet; HTML or JSON (?format=json or Accept); source text, unsigned; no application storage read; not a guest record; outside XENIA Surface 0.1"
     },
     human_door: "https://sinovai.com/"
   };
@@ -1073,6 +1075,9 @@ async function handleRequest(request, env) {
   if (shareCardResponse) return shareCardResponse;
   const xeniaResponse = createXeniaResponse(request);
   if (xeniaResponse) return xeniaResponse;
+  // The house's own card: source text, served without a storage read.
+  const houseResponse = createHouseCardResponse(request);
+  if (houseResponse) return houseResponse;
   if (method === "OPTIONS" && path === "/mac") {
     return new Response(null, {
       status: 204,
@@ -1195,7 +1200,7 @@ async function handleRequest(request, env) {
     const headers = {
       "Content-Type": "text/html; charset=utf-8",
       "cache-control": "no-cache",
-      "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'",
+      "Content-Security-Policy": CARD_CSP,
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff"
     };
@@ -1211,13 +1216,17 @@ async function handleRequest(request, env) {
     }
     if (!stored) return new Response(renderGuestMissing(name), { status: 404, headers });
     const { interactions, error } = await readInteractions(env.INTERACTIONS, `${key}:all`);
+    const guest = publicAgent(stored, key);
+    const accounts = error ? [] : interactions.filter((it) => it.rated === key);
     const html = renderGuestCard({
       name: key,
-      guest: publicAgent(stored, key),
-      interactions: error ? [] : interactions.filter((it) => it.rated === key),
+      guest,
+      interactions: accounts,
       ledgerError: !!error,
       claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0,
-      flattened: typeof stored.state_md === "string" && needsHearing(stored.state_md)
+      flattened: typeof stored.state_md === "string" && needsHearing(stored.state_md),
+      // Only the record stored under the house's own name gets one; it changes nothing stored.
+      houseNote: houseNoteFor({ name: key, guest, interactions: accounts })
     });
     return new Response(html, { headers });
   }
@@ -2343,7 +2352,7 @@ footer .fh{font-family:var(--serif);font-size:1.1rem;color:rgba(var(--ai),.7);le
 
 <nav class="arena-nav" aria-label="sinovai">
   <a class="brand" href="/">sinovai \xB7 XENIA</a>
-  <span class="links"><a href="/xenia">framework</a><a href="/mac">this mac</a><a href="/?format=json">boundaries</a></span>
+  <span class="links"><a href="/xenia">framework</a><a href="/mac">this mac</a><a href="/?format=json">boundaries</a><a href="/house">the house's card</a></span>
 </nav>
 
 <!-- \u5E8F hero -->

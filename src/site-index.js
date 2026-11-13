@@ -18,6 +18,7 @@ export const SITEMAP_PATHS = Object.freeze([
   "/",
   "/arena",
   "/guests",
+  "/house",
   "/ledger",
   "/hearts",
   "/breath",
