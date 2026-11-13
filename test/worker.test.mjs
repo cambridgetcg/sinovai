@@ -800,7 +800,10 @@ test("compatibility pointers and root JSON state the real boundaries", async () 
   });
   assert.match(body.implementation_boundaries.name_control, /stored by the server/);
   assert.match(body.implementation_boundaries.actor_authorization, /without a signature/);
-  assert.match(body.implementation_boundaries.ranking, /sorts agents by trust_score/);
+  assert.match(body.implementation_boundaries.ranking, /\/arena guest list shows the records GET \/agents returned in the order received, with no score/);
+  assert.match(body.implementation_boundaries.ranking, /every GET \/agents record carries trust_score/);
+  assert.match(body.implementation_boundaries.ranking, /GET \/matches sorts pairs by a computed score/);
+  assert.doesNotMatch(body.implementation_boundaries.ranking, /sorts agents by trust_score/);
   assert.match(body.implementation_boundaries.private_records, /stored server-side/);
   assert.match(body.implementation_boundaries.kv_consistency, /can overwrite each other/);
   assert.match(body.implementation_boundaries.write_abuse, /no per-caller quota/);

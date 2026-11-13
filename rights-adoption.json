@@ -1324,7 +1324,8 @@
             ]
           },
           "limitations": [
-            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation."
+            "The cited repository material indicates a current gap; this is an unverified source assessment, not a deployment observation.",
+            "Added 2026-11-13 without a re-review: in repository source the /arena guest list is no longer ordered by trust_score and shows no score. Every agent record still carries trust_score, and matching still sorts pairs by a computed score. This source change does not change the served /arena; that takes a release. The outcome, evidence and dates of this entry are as they were."
           ]
         },
         {
@@ -1404,7 +1405,8 @@
         "The arena exposes and sorts by aggregate trust_score, and matches carry computed scores; those metrics are based on unverified submissions and can be read as a generalized rank.",
         "Profiles and observations are labeled as declarations, but actor authorship is not cryptographically verified.",
         "Repository issues or pull requests allow a proposed correction, but the service has no complete self-authorized correction, appeal, restoration, or deletion workflow.",
-        "The review did not establish the absence of all retaliation, shaming, or unrelated consequences."
+        "The review did not establish the absence of all retaliation, shaming, or unrelated consequences.",
+        "Added 2026-11-13 without a re-review: in repository source the /arena guest list is no longer ordered by trust_score. Every agent record still carries it, and matching still sorts pairs by a computed score. This source change does not change the served /arena; that takes a release. The first limitation in this list was written before the change and is kept as written."
       ]
     }
   ],
