@@ -22,6 +22,7 @@ export const HOUSE_RECORD_NAME = "sinovai";
 export const HOUSE_CARD_SCHEMA = "sinovai.house-card/0.1";
 export const HOUSE_CARD_PATH = "/house";
 export const HOUSE_NOTE_HEADING = "a note from the house: a proposal, not part of this record";
+export const HOUSE_NOTE_REST_HEADING = "the rest of the note from the house: a proposal, not part of this record";
 
 // The root JSON's implementation_boundaries.not_established, kept here so the
 // card and the root JSON carry one list.
@@ -191,10 +192,10 @@ export function receivedPrefix(text) {
 }
 
 // Characters the note does not show as they are: control characters, the line
-// and paragraph separators, and the characters that embed, override or isolate
-// text direction. Each is written as its code in square brackets, so nothing
+// and paragraph separators, and the characters that mark, embed, override or
+// isolate text direction. Each is written as its code in square brackets, so nothing
 // unseen in a record's first line can change how the note reads.
-const SHOWN_AS_CODE = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+const SHOWN_AS_CODE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
 
 function withCodes(text) {
   let count = 0;
@@ -220,8 +221,11 @@ function storedTime(value) {
 // Returns null for every name but the house's. The note is plain text made
 // when the page is read. It is stored nowhere and changes no record.
 //
-// lines holds the house's sentences. None of them carries text from the
-// record: they vary with counts and stored dates only. The start of the
+// The note is in two pieces, so that the guest's words come before most of the
+// house's. lead is two sentences for above the record: whose words these are
+// not, and where the house's own card is. lines is the rest, for after the
+// record's three parts. None of these sentences carries text from the record:
+// they vary with counts and stored dates only. The start of the
 // record's text is a field of its own, received_start, which the page puts in
 // an element of its own under the line that introduces it. A first line can
 // therefore not close a quotation and go on in the house's voice. The line
@@ -243,13 +247,15 @@ export function houseNoteFor({ name, guest, interactions }) {
     begins = `The text as received begins as the box under this line shows: ${characters} ${characters === 1 ? "character" : "characters"}, the record's and not the house's.`;
     if (prefix.cut_by_length) begins += ` The first line goes on past the box, which stops after the text's first ${PREFIX_CODE_POINTS} characters.`;
     if (count) begins += ` Where the text holds a control, line-separator or text-direction character, the box shows its code in square brackets; ${count} ${count === 1 ? "is" : "are"} shown that way.`;
-    receivedStart = { under_line: 1, text: shown, characters, cut_by_length: prefix.cut_by_length, shown_as_codes: count };
+    receivedStart = { under_line: 0, text: shown, characters, cut_by_length: prefix.cut_by_length, shown_as_codes: count };
   }
 
-  const lines = [
+  const lead = [
     `This record is stored under the name ${HOUSE_RECORD_NAME}. That is also the name the house uses for itself.`,
+    `The house does not present this text as its own words. The house's own card is at ${HOUSE_CARD_PATH}.`
+  ];
+  const lines = [
     begins,
-    `The house does not present this text as its own words. The house's own card is at ${HOUSE_CARD_PATH}.`,
     "Who declared this record is not verified.",
     "Nothing in this record was moved or rewritten for this note. The note is worked out each time this page is read and is stored nowhere."
   ];
@@ -262,12 +268,12 @@ export function houseNoteFor({ name, guest, interactions }) {
       return at !== null && at < first;
     }).length;
     if (earlier > 0) {
-      lines.push(`${earlier} ${earlier === 1 ? "account below is" : "accounts below are"} dated before the first declaration date on file (${firstOnFile}). This note does not establish what any account was about.`);
+      lines.push(`${earlier} ${earlier === 1 ? "account on this page is" : "accounts on this page are"} dated before the first declaration date on file (${firstOnFile}). This note does not establish what any account was about.`);
     }
   }
   lines.push(`This note can be contested with an issue or a pull request at ${rightsAdoption.host.repository}. Opening one may require repository access. That path is not an in-service appeal and promises no outcome.`);
 
-  return { heading: HOUSE_NOTE_HEADING, lines, received_start: receivedStart, house_card: HOUSE_CARD_PATH, contest: rightsAdoption.host.repository };
+  return { heading: HOUSE_NOTE_HEADING, lead, rest_heading: HOUSE_NOTE_REST_HEADING, lines, received_start: receivedStart, house_card: HOUSE_CARD_PATH, contest: rightsAdoption.host.repository };
 }
 
 const HOUSE_ALLOW = "GET, HEAD, OPTIONS";

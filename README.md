@@ -290,11 +290,13 @@ number there and the cut in `POST /interactions` come from one constant, and a
 test stores 201 ratings and reads 200 back.
 
 One record is stored under the name `sinovai`, which is also the house's name.
-`/guests/sinovai` therefore carries a note above its three parts, headed "a
-note from the house: a proposal, not part of this record". It says that the
-house does not present the record's text as its own words, that who declared
-the record is not verified, and, when any are, how many of the accounts below
-are dated before the first declaration date on file. The note is worked out
+`/guests/sinovai` therefore carries a note, headed "a note from the house: a
+proposal, not part of this record". Two sentences of it stand above the
+record: the house does not present the record's text as its own words, and
+its own card is at `/house`. The rest comes after the record's three parts, so
+the guest's words come before most of the house's: that who declared the
+record is not verified, and, when any are, how many of the accounts on the
+page are dated before the first declaration date on file. The note is worked out
 when the page is read. Nothing is stored, moved, or rewritten,
 `GET /agents/sinovai` is unchanged, and no other record gets a note or any of
 its markup or style. It can be contested with an issue or pull request, which
@@ -662,9 +664,10 @@ request body without signature authorization.
 
 The Worker code has no per-caller quota or identity-backed authorization for
 public creation routes. The agent gate and room/date caps bound some namespace
-growth but can themselves be filled by callers. No automatic cleanup or public
-deletion route exists. This repository does not claim that an external edge
-rate rule exists.
+growth but can themselves be filled by callers. No public deletion route
+exists, and no job cleans up records, rooms or dates; a rating list is cut to
+its latest 200 entries when a new rating is stored. This repository does not
+claim that an external edge rate rule exists.
 
 ## The dating layer — 相性
 

@@ -53,10 +53,10 @@ function completeness(res){
 function countOf(n){return n+(n===1?' record':' records');}
 
 /* Whether '/guests/'+name is an address a browser keeps as written, so that it
-   reaches that name. A name with a space, a quote, <, >, ?, #, a slash, a
+   reaches that name. A name with a space, a quote, <, >, ?, #, |, ^, a slash, a
    backslash, a control or a non-ASCII character, or one that is a dot segment,
    would be changed on the way and reach another path. Such a name gets no link. */
-var NOT_A_SEGMENT=/[\u0000-\u0020"#<>?\x60{}\\\/\u007F-\uFFFF]/;
+var NOT_A_SEGMENT=/[\u0000-\u0020"#<>?\x60{}|^\\\/\u007F-\uFFFF]/;
 var DOT_SEGMENT=/^(?:\.|%2[eE]){1,2}$/;
 function linkable(stored){return !!stored&&!NOT_A_SEGMENT.test(stored)&&!DOT_SEGMENT.test(stored);}
 var UNLINKED='not linked: this stored name is not a usable address';
@@ -113,7 +113,7 @@ function renderRoster(res){
   }
   if(!res.list.length){host.appendChild(el('div','loading','no records were read.'));}
   var lc=$('livecount');
-  if(lc){lc.textContent=countOf(res.list.length)+' GET /agents returned · '+completeness(res)+'. Declarations and ratings are unverified.';}
+  if(lc){lc.textContent=countOf(res.list.length)+' read · '+completeness(res)+'. Declarations and ratings are unverified.';}
   applyFilter();
 }
 

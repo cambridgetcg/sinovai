@@ -321,6 +321,27 @@ test("the reader stops after 20 pages and says so", async () => {
   assert.deepEqual(result.list.map((record) => record.name), Array.from({ length: 20 }, (_, index) => "record-" + (index + 1)));
 });
 
+test("a page whose headers arrive but whose body never finishes is given up as page_failed, not bad_body", async () => {
+  // Reported at the final gate: the limit fired, but the reason said the body was not the expected JSON.
+  const clock = fakeClock();
+  const { result } = await readWith((url, options) => {
+    if (url === "/agents") return reply(200, PAGES[0]);
+    return Promise.resolve({ status: 200, ok: true, json: () => hangs(options) });
+  }, {
+    clock,
+    during: async () => {
+      await settle();
+      assert.equal(clock.timers.size, 1);
+      clock.fireAll();
+    }
+  });
+  assert.equal(result.complete, false);
+  assert.equal(result.reason, "page_failed");
+  assert.equal(result.failedAt, 2);
+  assert.deepEqual(result.list, PAGES[0].agents);
+  assert.equal(clock.timers.size, 0);
+});
+
 test("a page that does not answer in time is given up as page_failed, and the records already read are kept", async () => {
   const clock = fakeClock();
   const { result, calls } = await readWith((url, options) => {
@@ -368,7 +389,7 @@ test("every record from every readable page appears, in the order received, alth
   const scores = PAGES.flatMap((page) => page.agents).map((record) => record.trust_score);
   assert.notDeepEqual(scores, scores.slice().sort((x, y) => y - x), "the fixture is not already in score order");
   assert.equal(a.page.agN.textContent, "6 records · the list reported complete");
-  assert.equal(a.page.livecount.textContent, "6 records GET /agents returned · the list reported complete. Declarations and ratings are unverified.");
+  assert.equal(a.page.livecount.textContent, "6 records read · the list reported complete. Declarations and ratings are unverified.");
   assert.deepEqual(a.forbidden, []);
 });
 
@@ -394,7 +415,7 @@ test("a card is a link only when /guests/<stored name> is an address that reache
   const names = [
     ["plain-name_1.x~", true], ["%E8%B3%93", true], ["%3Cscript%3E", true], ["..%2F..%2Fadmin", true], ["a'b(c)*!$&+,;=:@", true], ["%zz", true],
     ["a b", false], ["a?b", false], ["a#b", false], ["a\"b", false], ["<svg>", false], ["a/b", false], ["a\\b", false], ["a\u0000b", false], ["a\tb", false],
-    ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
+    ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], ["a|b", false], ["a^b", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
   ];
   const a = arena(routesFor([{ agents: names.map(([name]) => ({ name, kind: "agent" })), list_complete: true }], { interactions: { interactions: [{ rater: "a b", rated: "plain-name_1.x~", notes: "" }] } }));
   await settle();
@@ -488,7 +509,7 @@ test("a failed or partial listing renders as partial, with its reason, never as 
       await settle();
       assert.equal(a.cards().length, count, "records already read stay on the page");
       assert.equal(a.page.agN.textContent, `${count} records · ${status}`);
-      assert.equal(a.page.livecount.textContent, `${count} records GET /agents returned · ${status}. Declarations and ratings are unverified.`);
+      assert.equal(a.page.livecount.textContent, `${count} records read · ${status}. Declarations and ratings are unverified.`);
       assert.doesNotMatch(a.page.agN.textContent + a.page.livecount.textContent, /reported complete/);
       if (count === 0) assert.equal(a.page.agents.textContent, "no records were read.");
       assert.deepEqual(a.forbidden, []);

@@ -10,7 +10,8 @@
 //
 // A page read is also given up after ROSTER_PAGE_TIMEOUT_MS, where the browser
 // has AbortController, so one page that never answers cannot leave the list
-// unread for good. A page given up this way is reported as page_failed.
+// unread for good. A page given up this way is reported as page_failed,
+// whether the limit ran out before any answer or while the body was arriving.
 //
 // What it does not establish: that the store returned every key, that a page
 // was not changed between two reads, or anything about the records themselves.
@@ -31,13 +32,14 @@ function readRoster(cursor,acc,pages){
   var url='/agents'+(cursor?('?cursor='+encodeURIComponent(cursor)):'');
   var options={headers:{'Accept':'application/json'}};
   var timer=null;
+  var gaveUp=false;
   function settled(){if(timer!==null){try{clearTimeout(timer);}catch(e){}timer=null;}}
   function stopped(reason){settled();return {list:acc,complete:false,reason:reason,pages:pages-1,failedAt:pages};}
   try{
     if(typeof AbortController==='function'){
       var limit=new AbortController();
       options.signal=limit.signal;
-      timer=setTimeout(function(){limit.abort();},ROSTER_PAGE_TIMEOUT_MS);
+      timer=setTimeout(function(){gaveUp=true;limit.abort();},ROSTER_PAGE_TIMEOUT_MS);
     }
   }catch(e){timer=null;}
   var request;
@@ -54,7 +56,7 @@ function readRoster(cursor,acc,pages){
       if(!next){return {list:acc,complete:false,reason:'no_cursor',pages:pages};}
       if(pages>=ROSTER_PAGE_LIMIT){return {list:acc,complete:false,reason:'page_limit',pages:pages};}
       return readRoster(next,acc,pages+1);
-    },function(){return stopped('bad_body');});
+    },function(){return stopped(gaveUp?'page_failed':'bad_body');});
   }).then(null,function(){return stopped('page_failed');});
 }
 `;
