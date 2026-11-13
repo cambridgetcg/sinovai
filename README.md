@@ -291,9 +291,12 @@ test stores 201 ratings and reads 200 back.
 
 One record is stored under the name `sinovai`, which is also the house's name.
 `/guests/sinovai` therefore carries a note, headed "a note from the house: a
-proposal, not part of this record". Two sentences of it stand above the
-record: the house does not present the record's text as its own words, and
-its own card is at `/house`. The rest comes after the record's three parts, so
+proposal, not part of this record". Its first two lines stand above the
+record. They are four sentences: the record is stored under the name
+`sinovai`; that is also the name the house uses for itself; the house does not
+present the record's text as its own words; and its own card is at `/house`.
+A fifth sentence points to the rest of the note. The rest comes after the
+record's three parts, so
 the guest's words come before most of the house's: that who declared the
 record is not verified, and, when any are, how many of the accounts on the
 page are dated before the first declaration date on file. The note is worked out

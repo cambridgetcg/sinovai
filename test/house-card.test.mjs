@@ -640,7 +640,7 @@ test("the note is the house's proposal, derived from the record as read", () => 
   assert.equal(note.house_card, "/house");
   assert.equal(note.contest, rightsAdoption.host.repository);
   assert.equal([...ONE_LINE_START].length, 34);
-  // Two sentences go above the guest's words. Everything else goes after the three parts.
+  // Two lines (four sentences) and a pointer go above the guest's words. Everything else goes after the three parts.
   assert.deepEqual(note.lead, [
     "This record is stored under the name sinovai. That is also the name the house uses for itself.",
     "The house does not present this text as its own words. The house's own card is at /house."
@@ -756,7 +756,7 @@ test("the note says how the text begins, or that there is nothing to show", () =
   assert.equal(note("### deep heading\nx").received_start.text, "### deep heading");
 });
 
-test("/guests/sinovai carries the note in two places: two sentences above the guest's words, the rest after the three parts", async () => {
+test("/guests/sinovai carries the note in two places: two lines above the guest's words, the rest after the three parts", async () => {
   const html = await (await call(makeEnv(), "/guests/sinovai")).text();
   const notes = noteOf(html);
   assert.equal(notes.length, 2);
