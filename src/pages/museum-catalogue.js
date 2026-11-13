@@ -91,10 +91,11 @@ export const MUSEUM_CATALOGUE = {
       as_of: "2026-07-06"
     },
     {
-      title: "the host is its own lowest-trusted citizen",
-      fact: "the arena publishes its own worst number, unedited",
+      title: "a rating of the record named sinovai",
+      fact: "correction, 2026-11-13: the earlier text of this exhibit called the record named sinovai the host and gave it a rank among the records; both are withdrawn. What it pointed at stays where it was: the retained rating and the computed score that GET /agents/sinovai returns for that record. The record stored under that name is not the house's own card; that card is GET /house",
       source: "GET /agents/sinovai",
-      as_of: "2026-07-13"
+      as_of: "2026-07-13",
+      corrected_at: "2026-11-13"
     },
     {
       title: "the arena that stops judging",

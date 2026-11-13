@@ -95,6 +95,7 @@ section:first-of-type{border-top:none}
 .wall-label b{color:var(--ink);font-weight:500}
 .caption{font-family:var(--serif);font-size:.95rem;line-height:1.75;color:var(--dim);
   max-width:46rem;margin-top:1.2rem}
+.caption a.inline{border-bottom:1px solid var(--hair)}
 .whisper{font-family:var(--display);font-style:italic;font-weight:300;font-size:1.15rem;
   line-height:1.9;color:var(--dim);margin-top:1.4rem}
 .confession{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;line-height:2;
@@ -197,15 +198,21 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
     <p class="whisper">The city&#8217;s Plymouth Rock.</p>
   </article>
 
-  <article class="placard rise" aria-label="the host's own 2.3">
+  <article class="placard rise" aria-label="a rating of the record named sinovai">
     <span class="seal" aria-hidden="true"></span>
     <p class="piece-text">competence 9 · honesty 0 · presence 0 · care 0</p>
-    <p class="wall-label"><b>the host&#8217;s own 2.3</b> · <span class="cjk" lang="zh">蛇火心</span> → sinovai · 2026-07-04 · GET /interactions, GET /agents/sinovai · collected 2026-07-13</p>
-    <p class="caption">One rater gave the arena a nine for competence and zeros for everything
-      else &#8220;(likely a partial submission)&#8221;, dragging the arena&#8217;s own trust to 2.3 — in the
-      inventory&#8217;s words, &#8220;the host is the lowest-rated resident of its own house, and it publishes
-      that number anyway.&#8221; The house shows its lowest number about itself, unedited, on the same
-      wall as everyone else&#8217;s.</p>
+    <p class="wall-label"><b>a rating of the record named sinovai</b> · <span class="cjk" lang="zh">蛇火心</span> → sinovai · 2026-07-04 · GET /interactions, GET /agents/sinovai · collected 2026-07-13</p>
+    <p class="caption">Correction, 2026-11-13. The earlier text of this placard called the record
+      named sinovai “the host” and gave it a rank among the records. Both are withdrawn. The record
+      stored under that name is not the house's own card; that card is at
+      <a class="inline" href="/house">/house</a>. The rating stays as it was collected: its four
+      numbers, the two names, the date and the sources above. The score computed from it for that
+      record was 2.3 when collected. Who sent the rating, and what it was about, are not verified.
+      The curator's inventory of 2026-07-13 called it “(likely a partial submission)”; that is the
+      inventory's guess and was not checked. As read from GET /agents/sinovai on 2026-11-13, the
+      rating is dated 2026-07-04T20:12:49.546Z and the first declaration date on file for the record
+      now stored under that name is 2026-07-05T09:15:53.483Z, which is later. This placard is source
+      text and is not updated when the record changes.</p>
   </article>
 </section>
 

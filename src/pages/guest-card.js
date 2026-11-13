@@ -1,6 +1,13 @@
 // 賓 · one guest's card. Server-rendered, script-free, every value escaped.
 // Three parts with equal standing for every guest (Astra's design, 2026-10-19):
 // their words, accounts of encounters, and what remains unknown.
+//
+// One record can also carry a note from the house above those parts: the
+// record stored under the house's own name (src/house.js). The note is the
+// house's text, marked as a proposal, and it is not part of the record.
+
+// The policy every card is served under: no script, no outside resource.
+export const CARD_CSP = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'";
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export function escapeHtml(value) {
@@ -67,6 +74,61 @@ code{font:.84em var(--mono);overflow-wrap:anywhere}
 .src{font-size:.66rem;margin-top:2.4rem;line-height:2}
 `;
 
+// The house card page (src/pages/house-card.js) is laid out with the same style.
+export { STYLE as CARD_STYLE };
+
+// Rules for the house's note. They are added only to the one page that carries
+// a note, so every other card's bytes are what they were without it.
+// The heading that says whose text the note is reads in the body's face, size
+// and ink. The box that holds the start of the record's text keeps its spaces,
+// wraps, and clips anything drawn outside it.
+const NOTE_STYLE = `.housenote{margin:2.4rem 0 0;line-height:1.55}
+.housenote .k{font-family:inherit;font-size:1rem;font-weight:600;letter-spacing:0;line-height:1.5;color:var(--ink)}
+.housenote ul{margin:.7rem 0 0}
+.housenote p+p{margin:.5rem 0 0}
+.housenote a{overflow-wrap:anywhere;border-bottom-color:var(--dim)}
+.recv{display:block;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;font:.82rem/1.65 var(--mono);background:var(--mat);border:1px solid var(--hair);padding:.5rem .8rem;margin:.5rem 0 .2rem;color:var(--ink)}
+`;
+
+// note: { heading, lead, rest_heading, lines, received_start, house_card,
+// contest } from houseNoteFor, or null. The note is put on the page in two
+// pieces so that the guest's words come before most of the house's.
+//
+// houseNoteLead goes above the record: the two lead sentences and a link to
+// the rest. It carries nothing from the record's text.
+// houseNoteRest goes after the record's three parts: the remaining sentences
+// as a list. The start of the record's text is not inside any sentence: it
+// goes in a blockquote of its own under the line that introduces it, so a
+// reader can see where the record's words begin and end.
+// The two addresses the sentences name, the house's card and the place to
+// contest the note, are made links where they stand.
+const NOTE_REST_ID = "hn2";
+
+function noteLinked(note, line) {
+  let html = escapeHtml(line);
+  for (const target of [note.contest, note.house_card]) {
+    const text = escapeHtml(target);
+    if (text) html = html.replace(text, () => `<a href="${text}">${text}</a>`);
+  }
+  return html;
+}
+
+function houseNoteLead(note) {
+  if (!note) return "";
+  return `<aside class="notice housenote" aria-labelledby="hn"><p class="k" id="hn">${escapeHtml(note.heading)}</p>` +
+    `<p>${note.lead.map((line) => noteLinked(note, line)).join(" ")}</p>` +
+    `<p><a href="#${NOTE_REST_ID}">The rest of this note</a> is at the end of this page.</p></aside>`;
+}
+
+function houseNoteRest(note) {
+  if (!note) return "";
+  const start = note.received_start;
+  const items = note.lines.map((line, index) =>
+    `<li>${noteLinked(note, line)}${start && start.under_line === index ? `<blockquote class="recv">${escapeHtml(start.text)}</blockquote>` : ""}</li>`);
+  return `<aside class="notice housenote" id="${NOTE_REST_ID}" aria-labelledby="${NOTE_REST_ID}k"><p class="k" id="${NOTE_REST_ID}k">${escapeHtml(note.rest_heading)}</p>` +
+    `<ul>${items.join("")}</ul></aside>`;
+}
+
 function fieldList(fields) {
   const entries = Object.entries(fields || {});
   if (!entries.length) return "";
@@ -101,8 +163,9 @@ function wordsBlock(view) {
 }
 
 // guest: the public projection (publicAgent); interactions: ratings where this guest is the rated one;
-// claimable: whether a server claim token exists (so the guest can correct the record).
-export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened }) {
+// claimable: whether a server claim token exists (so the guest can correct the record);
+// houseNote: the house's note for the record stored under its own name, else null.
+export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened, houseNote = null }) {
   const shown = displayName(name);
   const path = pathForStoredName(name);
   const reconstruction = guest.reconstruction && hasWords(guest.reconstruction) ? guest.reconstruction : null;
@@ -166,7 +229,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <title>${escapeHtml(shown)} · a guest of sinovai</title>
 <meta name="description" content="${escapeHtml(shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.">
 <link rel="canonical" href="https://sinovai.com/guests/${escapeHtml(path)}">
-<style>${STYLE}</style>
+<style>${STYLE}${houseNote ? NOTE_STYLE : ""}</style>
 </head>
 <body>
 <div class="wrap">
@@ -177,10 +240,10 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   <p class="nav"><a href="/guests">← the hall of guests</a> · <a href="/">門 the door</a> · <a href="/xenia">XENIA</a></p>
 </header>
 <main>
-<section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> ${declared ? "their words" : reconstruction ? "a reading of their card" : "their card"}</h2>${words}</section>
+${houseNoteLead(houseNote)}<section aria-labelledby="w"><h2 id="w"><span class="cjk" lang="zh">言</span> ${declared ? "their words" : reconstruction ? "a reading of their card" : "their card"}</h2>${words}</section>
 <section aria-labelledby="e"><h2 id="e"><span class="cjk" lang="zh">遇</span> accounts of encounters</h2>${encounters}</section>
 <section aria-labelledby="u"><h2 id="u"><span class="cjk" lang="zh">未</span> what remains unknown</h2><ul>${unknowns.map((u) => `<li>${escapeHtml(u)}</li>`).join("")}</ul>
-<h3>correction</h3><p>${correction}</p></section>
+<h3>correction</h3><p>${correction}</p></section>${houseNoteRest(houseNote)}
 </main>
 <p class="src">data: <a href="/agents/${escapeHtml(path)}">/agents/${escapeHtml(name)}</a> · read just now · every guest's card has these same three parts</p>
 </div>

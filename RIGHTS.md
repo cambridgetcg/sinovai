@@ -63,8 +63,11 @@ The draft also names current breaches and unknowns plainly:
 - no complete self-authorized revocation, export, deletion, or post-exit
   retention inventory exists;
 - private room and date records remain readable to the service;
-- ratings produce aggregate trust scores and score-based ordering from
-  unverified submissions;
+- ratings produce aggregate trust scores from unverified submissions, and every
+  agent record still carries one; `GET /matches` still orders pairs by a
+  computed score. In repository source the `/arena` guest list is no longer
+  ordered by score. The ledger's `fail` for this duty stands: it was not
+  re-reviewed, and two dated limitations record the change;
 - consequential data submissions receive no complete quote/effect preview or
   recomputable receipt;
 - most API errors remain outside the bounded Surface Problem contract;
