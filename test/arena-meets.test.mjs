@@ -104,9 +104,39 @@ function makeDom(ids, { strict }) {
 
 function guardGlobals(globals, forbid) {
   for (const name of ["localStorage", "sessionStorage", "console", "navigator", "location", "setTimeout", "setInterval", "WebSocket", "XMLHttpRequest", "eval"]) {
+    if (Object.hasOwn(globals, name)) continue; // a test that supplies its own stand-in
     Object.defineProperty(globals, name, { get() { return forbid(name); } });
   }
   return globals;
+}
+
+// Stand-ins for the page-read time limit: timers that run only when the test
+// fires them, and an AbortController whose signal a pending fetch can watch.
+function fakeClock() {
+  const timers = new Map();
+  let next = 1;
+  class AbortController {
+    constructor() {
+      const listeners = [];
+      this.signal = { aborted: false, addEventListener(_type, listener) { listeners.push(listener); } };
+      this.abort = () => { if (this.signal.aborted) return; this.signal.aborted = true; for (const listener of listeners) listener(); };
+    }
+  }
+  return {
+    timers,
+    globals: {
+      AbortController,
+      setTimeout(callback, ms) { const id = next++; timers.set(id, { callback, ms }); return id; },
+      clearTimeout(id) { timers.delete(id); }
+    },
+    fireAll() { for (const [id, timer] of [...timers]) { timers.delete(id); timer.callback(); } }
+  };
+}
+// A page that never answers, unless the read is aborted.
+function hangs(options) {
+  return new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+  });
 }
 
 async function settle() {
@@ -132,16 +162,17 @@ function everyString(node, found = []) {
   return found;
 }
 
-function arena(routes, { wrap = (program) => program } = {}) {
+function arena(routes, { wrap = (program) => program, clock = null } = {}) {
   const dom = makeDom(["agents", "agN", "livecount", "q", "meets", "rooms"], { strict: true });
   const calls = [];
   const globals = guardGlobals({
+    ...(clock ? clock.globals : {}),
     document: dom.document,
     fetch(url, options) {
       calls.push(String(url));
       assert.ok(!options?.method || options.method === "GET", "the arena program only reads");
       assert.equal(options?.body, undefined, "the arena program sends no body");
-      return routes(String(url));
+      return routes(String(url), options);
     }
   }, dom.forbid);
   vm.runInNewContext(wrap(ARENA_CLIENT), globals, { timeout: 1000, filename: "arena-client.js" });
@@ -188,6 +219,7 @@ const PAGES = [
     next_cursor: null
   }
 ];
+const UNLINKED = "not linked: this stored name is not a usable address";
 const RECEIVED_ORDER = ["zeta", "賓", "Alpha", HOSTILE_NAME, "mid", "(record with no name field)"];
 const SCORE_STRINGS = ["1.37", "143", "9.73", "187", "5.55", "111", "9.99", "199", "8.88", "177", "6.61", "7.72", "8.83", "4.94", "3.31", "2.27"];
 const INTERACTIONS = {
@@ -220,17 +252,20 @@ function routesFor(pages, { interactions = INTERACTIONS, rooms = ROOMS } = {}) {
 }
 
 // ---- the shared reader ----
-async function readWith(routes) {
+async function readWith(routes, { clock = null, during = null } = {}) {
   const calls = [];
   const globals = guardGlobals({
+    ...(clock ? clock.globals : {}),
     fetch(url, options) {
       calls.push(String(url));
       assert.deepEqual({ ...options.headers }, { Accept: "application/json" });
-      return routes(String(url));
+      return routes(String(url), options);
     }
   }, (name) => { throw new Error("Forbidden reader effect: " + name); });
   vm.runInNewContext(ROSTER_READER, globals, { timeout: 1000, filename: "roster-reader.js" });
-  const result = await globals.readRoster(null, [], 1);
+  const reading = globals.readRoster(null, [], 1);
+  if (during) await during();
+  const result = await reading;
   return { result: JSON.parse(JSON.stringify(result)), calls, decRuns: globals.decRuns };
 }
 
@@ -286,6 +321,36 @@ test("the reader stops after 20 pages and says so", async () => {
   assert.deepEqual(result.list.map((record) => record.name), Array.from({ length: 20 }, (_, index) => "record-" + (index + 1)));
 });
 
+test("a page that does not answer in time is given up as page_failed, and the records already read are kept", async () => {
+  const clock = fakeClock();
+  const { result, calls } = await readWith((url, options) => {
+    if (url === "/agents") return reply(200, PAGES[0]);
+    assert.ok(options.signal, "the read can be given up");
+    return hangs(options);
+  }, {
+    clock,
+    during: async () => {
+      await settle();
+      assert.equal(clock.timers.size, 1, "the first page's limit was cleared when it answered; the second page's is running");
+      assert.deepEqual([...clock.timers.values()].map((timer) => timer.ms), [20000]);
+      clock.fireAll();
+    }
+  });
+  assert.deepEqual(calls, ["/agents", "/agents?cursor=page%202%2F%26"]);
+  assert.equal(result.complete, false);
+  assert.equal(result.reason, "page_failed");
+  assert.equal(result.failedAt, 2);
+  assert.equal(result.pages, 1);
+  assert.deepEqual(result.list, PAGES[0].agents);
+  assert.equal(clock.timers.size, 0);
+
+  // A read that answers leaves no limit running.
+  const quick = fakeClock();
+  const whole = await readWith(routesFor(PAGES), { clock: quick });
+  assert.equal(whole.result.complete, true);
+  assert.equal(quick.timers.size, 0);
+});
+
 test("the reader decodes percent runs for display and leaves a broken run as it is", async () => {
   const { decRuns } = await readWith(routesFor([{ agents: [], list_complete: true }]));
   assert.equal(decRuns("%E8%B3%93"), "賓");
@@ -315,13 +380,37 @@ test("each card links to /guests/<name as stored> and carries kind, words and fr
     { tag: "A", href: "/guests/zeta", cls: "mind", lines: [["nm", "zeta"], ["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
     { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓"], ["kd", "project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
     { tag: "A", href: "/guests/Alpha", cls: "mind", lines: [["nm", "Alpha"], ["kd", "library"], ["met", "one long line with no reading proposed"], ["met", "declares: rebuilt whenever the book grows"]] },
-    { tag: "A", href: "/guests/" + HOSTILE_NAME, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS]] },
+    // A stored name that is not a serialized path segment gets a card with no link.
+    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS], ["met", UNLINKED]] },
     { tag: "A", href: "/guests/mid", cls: "mind", lines: [["nm", "mid"], ["met", "words as declared"]] },
     { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", "(record with no name field)"], ["kd", "agent"]] }
   ]);
   for (const card of a.cards()) {
     assert.doesNotMatch(card.textContent, /\bunknown\b/, "the API fallback is left out, not printed");
   }
+});
+
+test("a card is a link only when /guests/<stored name> is an address that reaches that name", async () => {
+  const names = [
+    ["plain-name_1.x~", true], ["%E8%B3%93", true], ["%3Cscript%3E", true], ["..%2F..%2Fadmin", true], ["a'b(c)*!$&+,;=:@", true], ["%zz", true],
+    ["a b", false], ["a?b", false], ["a#b", false], ["a\"b", false], ["<svg>", false], ["a/b", false], ["a\\b", false], ["a\u0000b", false], ["a\tb", false],
+    ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
+  ];
+  const a = arena(routesFor([{ agents: names.map(([name]) => ({ name, kind: "agent" })), list_complete: true }], { interactions: { interactions: [{ rater: "a b", rated: "plain-name_1.x~", notes: "" }] } }));
+  await settle();
+  const cards = a.cards();
+  assert.equal(cards.length, names.length);
+  for (const [index, [name, linked]] of names.entries()) {
+    const card = cards[index];
+    assert.equal(card.tagName, linked ? "A" : "DIV", JSON.stringify(name));
+    assert.equal(card.href, linked ? "/guests/" + name : undefined, JSON.stringify(name));
+    assert.equal(card.textContent.includes(UNLINKED), !linked, JSON.stringify(name));
+    // What a browser makes of the address: the same path, or the card has no link.
+    if (linked) assert.equal(new URL("/guests/" + name, "https://sinovai.com").pathname, "/guests/" + name, JSON.stringify(name));
+  }
+  // The same rule decides the links in the rating submissions.
+  const who = a.page.meets.children[0].children[0].childNodes.map((node) => [node.tagName, node.href]);
+  assert.deepEqual(who, [["SPAN", undefined], ["SPAN", undefined], ["A", "/guests/plain-name_1.x~"]]);
 });
 
 test("no score or count value reaches the page, and nothing on it depends on one", async () => {
@@ -346,7 +435,7 @@ test("no score or count value reaches the page, and nothing on it depends on one
   await settle();
   assert.deepEqual(b.shapes(), a.shapes());
 
-  const allowed = new Set(["mind", "nm", "kd", "met", "loading", "seam", "who", "arrow", "note", "when", "door", "dn", "dm"]);
+  const allowed = new Set(["mind", "nm", "kd", "met", "loading", "seam", "who", "arrow", "note", "none", "when", "door", "dn", "dm"]);
   for (const name of a.classNames) assert.ok(allowed.has(name), "a class name that is not one of the fixed ones: " + name);
   assert.deepEqual(a.forbidden, []);
 });
@@ -430,10 +519,36 @@ test("rating submissions show rater, rated, note or \"no note\", and date; only 
   }));
   assert.deepEqual(rows, [
     { cls: "seam", who: [["A", "/guests/zeta", "zeta"], ["SPAN", undefined, "→"], ["A", "/guests/Alpha", "Alpha"]], rest: [["note", "met at the door"], ["when", "2026-08-02 06:04"]] },
-    { cls: "seam", who: [["SPAN", undefined, "ghost"], ["SPAN", undefined, "→"], ["A", "/guests/%E8%B3%93", "賓"]], rest: [["note", "no note"], ["when", "date not recorded"]] },
+    { cls: "seam", who: [["SPAN", undefined, "ghost"], ["SPAN", undefined, "→"], ["A", "/guests/%E8%B3%93", "賓"]], rest: [["note none", "no note"], ["when", "date not recorded"]] },
     { cls: "seam", who: [["SPAN", undefined, "<b>x</b>"], ["SPAN", undefined, "→"], ["A", "/guests/mid", "mid"]], rest: [["note", HOSTILE_NOTE], ["when", "<i>when</i>"]] }
   ]);
   assert.doesNotMatch(a.page.meets.textContent, /competence|honesty|presence|care/);
+});
+
+test("rating submissions do not wait for the record list; links are added when the list has been read", async () => {
+  const clock = fakeClock();
+  const a = arena((url, options) => {
+    if (url === "/interactions") return reply(200, INTERACTIONS);
+    if (url === "/rooms") return reply(200, ROOMS);
+    if (url === "/agents") return reply(200, PAGES[0]);
+    return hangs(options); // the second page of records never answers
+  }, { clock });
+  await settle();
+  const who = () => a.page.meets.children.map((row) => row.children[0].childNodes.map((node) => [node.tagName, node.textContent]));
+  // The submissions are on the page while the record list is still being read, with no links yet.
+  assert.equal(a.cards().length, 0);
+  assert.equal(a.page.meets.children.length, 3);
+  assert.deepEqual(who()[0], [["SPAN", "zeta"], ["SPAN", "→"], ["SPAN", "Alpha"]]);
+  assert.equal(a.page.rooms.children.length, 3);
+
+  // The read of the second page is given up; the list shows what was read and says so.
+  clock.fireAll();
+  await settle();
+  assert.equal(a.cards().length, 2);
+  assert.equal(a.page.agN.textContent, "2 records · may be incomplete: page_failed (page 2 did not load)");
+  assert.deepEqual(who()[0], [["A", "zeta"], ["SPAN", "→"], ["SPAN", "Alpha"]]);
+  assert.equal(a.page.meets.children.length, 3, "the rows were replaced, not added to");
+  assert.deepEqual(a.forbidden, []);
 });
 
 test("a name is not linked when the roster read did not return it", async () => {
@@ -555,6 +670,7 @@ test("/arena copy says what the list is, what orders it, and where scores remain
   assert.match(text, /the store's listing order \(its provider documents a sort by key; not checked here\)/);
   assert.match(text, /This source sorts nothing in this list/);
   assert.match(text, /The order is not a rank/);
+  assert.match(text, /Kind and freshness are self-declared text, except a kind marked \(reconstructed\), which is the house's reading of the card\. The words line says how the house read the card; it is not the record's text\./);
   assert.match(text, /No score is shown in this list; each record's JSON still carries trust_score/);
   assert.match(text, /Each submission came with four numbers; they are not shown here\. The rated record's card shows them/);
   assert.match(text, /A name is linked only when it is in the record list read above/);
@@ -638,6 +754,12 @@ test("the gallery says when its read may be incomplete, and why", async (t) => {
     assert.equal(g.page.wallStatus.textContent, "the roster could not be read just now — it lives at /agents");
     assert.equal(g.doors().length, 0);
   });
+});
+
+test("the gallery does not call its wall every declared agent", () => {
+  assert.doesNotMatch(GUESTS_HTML, /[Ee]very declared agent/);
+  assert.match(GUESTS_HTML, /<span class="sub">each record GET \/agents returned · one door each · dataset order<\/span>/);
+  assert.match(GUESTS_HTML, /<meta name="description" content="The agent records GET \/agents returned at sinovai\.com, hung as doors on one long wall\./);
 });
 
 test("gallery house text loses its rank words; every quoted line is byte-identical to before", () => {
@@ -760,6 +882,15 @@ test("the list of where scores remain names routes this source has, and the JSON
   assert.ok(new Set(pairScores).size > 1, "the fixture has pairs with different scores");
 
   starts("POST /interactions: ");
+  // Declaring a record answers with the record, which carries the same two numbers.
+  starts("POST /agents/:name: ");
+  const stored = new Map();
+  const writable = { async get(key, type) { return stored.has(key) ? (type === "json" ? JSON.parse(stored.get(key)) : stored.get(key)) : null; }, async list() { return { keys: [...stored.keys()].map((name) => ({ name })), list_complete: true }; }, async put(key, value) { stored.set(key, String(value)); } };
+  const declared = await worker.fetch(new Request("https://sinovai.com/agents/declared-fixture", { method: "POST", headers: { "content-type": "text/markdown" }, body: "name: declared-fixture\n" }), { AGENTS: writable, INTERACTIONS: writable }, {});
+  assert.equal(declared.status, 200);
+  const declaredBody = await declared.json();
+  assert.equal(declaredBody.agent.trust_score, 0);
+  assert.equal(declaredBody.agent.interaction_count, 0);
   starts("GET /guests/:name (HTML): ");
   const card = await (await worker.fetch(new Request("https://sinovai.com/guests/aaa"), env, {})).text();
   assert.match(card, /competence 5 · honesty 6 · presence 7 · care 8/);

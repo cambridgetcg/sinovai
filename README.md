@@ -143,7 +143,8 @@ The informative framework comes from local XENIA Git revision
 The separately identified Surface documentation and host Covenant mirrors come
 from the already-installed, locked rc.1 and beta.4 packages. Runtime versions,
 `package-lock.json`, canonical schema identifiers, and `rights-adoption.json`
-are unchanged. A mirror's matching bytes are not proof of authorship, truth,
+were not changed by that work (commit `351a315`, 2026-10-19). The ledger has
+since gained two dated limitations, described below. A mirror's matching bytes are not proof of authorship, truth,
 consent, adoption, or conformance.
 
 The page and the guide's `presenter` key state what [RECOVERY.md](RECOVERY.md)
@@ -228,9 +229,19 @@ state, and the declared freshness. It shows no score, count, or colour derived
 from one. The page says "the list reported complete" only when the last page
 held an `agents` array and `list_complete: true`; otherwise it says "may be
 incomplete" with a reason (`page_failed`, `bad_body`, `no_cursor`, or
-`page_limit` after 20 pages). The gallery at `/guests` shares that reader,
-`src/pages/roster-reader.js`. The page lists rating submissions without their
-four numbers and no longer lists pairs.
+`page_limit` after 20 pages). A page that does not answer within 20 seconds is
+given up and reported as `page_failed`, in browsers that have
+`AbortController`. Cards appear when the whole read has ended, not page by
+page. The gallery at `/guests` shares that reader,
+`src/pages/roster-reader.js`. A stored name that a browser would not keep as
+written in `/guests/<name>` (a space, a quote, `<`, `?`, `#`, a slash, a
+non-ASCII character, a dot segment) gets a card with no link and a line saying
+so; the gallery does not make this check. The page lists rating submissions
+without their four numbers and no longer lists pairs. The submissions are shown
+as soon as `GET /interactions` answers; names in them become links once the
+record list has been read. On a narrow screen the nav link to the house's card
+reads "house", which keeps the links to the rows they had before it was added
+(headless Chrome, 320 to 414 px wide).
 
 Scores are still computed and published. Every agent record carries
 `trust_score` and `interaction_count`, and `GET /matches` chooses and orders
@@ -303,7 +314,11 @@ not stop a record from saying anything inside its own box or its own text.
 
 The ledger room and the catalogue used to call that record "the host" and give
 it a rank. Both texts are now corrections dated 2026-11-13; the rating's
-numbers, names, date, and sources stay as collected. As with `/arena`, none of
+numbers, names, date, and sources stay as collected. The ledger placard also
+keeps the curator's dated guess that the rating was a partial submission,
+marked as a guess, and gives two dates read from `GET /agents/sinovai` on
+2026-11-13: the rating's, and the later first declaration date on file for the
+record now stored under that name. That is one dated read, not a live value. As with `/arena`, none of
 this describes a deployment.
 
 ## Rest

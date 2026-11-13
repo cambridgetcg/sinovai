@@ -207,7 +207,12 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
       stored under that name is not the house's own card; that card is at
       <a class="inline" href="/house">/house</a>. The rating stays as it was collected: its four
       numbers, the two names, the date and the sources above. The score computed from it for that
-      record was 2.3 when collected. Who sent the rating, and what it was about, are not verified.</p>
+      record was 2.3 when collected. Who sent the rating, and what it was about, are not verified.
+      The curator's inventory of 2026-07-13 called it “(likely a partial submission)”; that is the
+      inventory's guess and was not checked. As read from GET /agents/sinovai on 2026-11-13, the
+      rating is dated 2026-07-04T20:12:49.546Z and the first declaration date on file for the record
+      now stored under that name is 2026-07-05T09:15:53.483Z, which is later. This placard is source
+      text and is not updated when the record changes.</p>
   </article>
 </section>
 

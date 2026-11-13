@@ -52,14 +52,23 @@ function completeness(res){
 }
 function countOf(n){return n+(n===1?' record':' records');}
 
+/* Whether '/guests/'+name is an address a browser keeps as written, so that it
+   reaches that name. A name with a space, a quote, <, >, ?, #, a slash, a
+   backslash, a control or a non-ASCII character, or one that is a dot segment,
+   would be changed on the way and reach another path. Such a name gets no link. */
+var NOT_A_SEGMENT=/[\u0000-\u0020"#<>?\x60{}\\\/\u007F-\uFFFF]/;
+var DOT_SEGMENT=/^(?:\.|%2[eE]){1,2}$/;
+function linkable(stored){return !!stored&&!NOT_A_SEGMENT.test(stored)&&!DOT_SEGMENT.test(stored);}
+var UNLINKED='not linked: this stored name is not a usable address';
+
 function cardFor(entry){
   var rec=(entry&&typeof entry==='object')?entry:{};
   var stored=(typeof rec.name==='string'&&rec.name)?rec.name:'';
   var shown=stored?decRuns(stored):'(record with no name field)';
   var card;
-  if(stored){
+  if(linkable(stored)){
     card=el('a','mind');
-    card.href='/guests/'+stored; /* a stored name is already a serialized path segment; the href setter keeps it */
+    card.href='/guests/'+stored; /* a serialized path segment; the href setter keeps it */
   }else{
     card=el('div','mind');
   }
@@ -71,6 +80,7 @@ function cardFor(entry){
   if(kind){card.appendChild(el('div','kd',kind));}
   if(typeof rec.words==='string'&&own(WORDS_PHRASE,rec.words)){card.appendChild(el('div','met',WORDS_PHRASE[rec.words]));}
   if(typeof rec.freshness==='string'&&rec.freshness&&rec.freshness!=='unknown'){card.appendChild(el('div','met','declares: '+rec.freshness));}
+  if(stored&&!linkable(stored)){card.appendChild(el('div','met',UNLINKED));}
   return {node:card,stored:stored,shown:shown};
 }
 
@@ -115,7 +125,7 @@ if(q){q.addEventListener('input',applyFilter);}
 function nameNode(value,roster){
   var stored=(typeof value==='string'&&value)?value:'';
   if(!stored){return el('span',null,'(no name)');}
-  if(roster[stored]===true){
+  if(roster[stored]===true&&linkable(stored)){
     var a=el('a',null,decRuns(stored));
     a.href='/guests/'+stored;
     return a;
@@ -136,26 +146,31 @@ function renderMeets(data,roster){
     who.appendChild(el('span','arrow','→'));
     who.appendChild(nameNode(x.rated,roster));
     row.appendChild(who);
-    row.appendChild(el('div','note',(typeof x.notes==='string'&&x.notes)?x.notes:'no note'));
+    /* a rater's note is the rater's text; "no note" is the house's, and is styled apart */
+    if(typeof x.notes==='string'&&x.notes){row.appendChild(el('div','note',x.notes));}
+    else{row.appendChild(el('div','note none','no note'));}
     row.appendChild(el('div','when',(typeof x.timestamp==='string'&&x.timestamp)?x.timestamp.slice(0,16).replace('T',' '):'date not recorded'));
     host.appendChild(row);
   }
 }
-/* settled at once, so a failed read is never an unhandled rejection while the roster is still being read */
-var meetsRead=fetchJson('/interactions').then(function(data){return {data:data};},function(){return null;});
+/* The submissions are shown as soon as GET /interactions answers; they do not
+   wait for the record list. Until that list has been read no name is linked;
+   when it has, the rows are built again and only names in it are linked. */
+var MEETS=null;                       /* the body GET /interactions returned, once read */
+var ROSTER_NAMES=Object.create(null); /* names in the roster just read */
+function showMeets(){
+  try{renderMeets(MEETS,ROSTER_NAMES);}
+  catch(e){say($('meets'),'the rating submissions could not be read just now. They are at GET /interactions.');}
+}
+fetchJson('/interactions').then(function(data){MEETS=data;showMeets();},function(){
+  say($('meets'),'the rating submissions could not be read just now. They are at GET /interactions.');
+});
 rosterRead.then(function(res){
-  /* only names in the roster just read are linked */
-  var roster=Object.create(null);
   for(var i=0;i<res.list.length;i++){
     var rec=res.list[i];
-    if(rec&&typeof rec==='object'&&typeof rec.name==='string'&&rec.name){roster[rec.name]=true;}
+    if(rec&&typeof rec==='object'&&typeof rec.name==='string'&&rec.name){ROSTER_NAMES[rec.name]=true;}
   }
-  return meetsRead.then(function(read){
-    if(!read){throw new Error('not read');}
-    renderMeets(read.data,roster);
-  });
-}).then(null,function(){
-  say($('meets'),'the rating submissions could not be read just now. They are at GET /interactions.');
+  if(MEETS!==null){showMeets();}
 });
 
 /* ── rooms ── */

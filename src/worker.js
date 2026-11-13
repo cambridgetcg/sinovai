@@ -2251,6 +2251,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #e8c0
   .arena-nav{align-items:flex-start;flex-direction:column;gap:.4rem;padding:14px 18px}
   .arena-nav .links{gap:8px 14px}
 }
+@media(max-width:340px){
+  .arena-nav .links{gap:8px 9px}
+}
 
 /* \u2500\u2500 boot \u2500\u2500 */
 #boot{position:fixed;inset:0;z-index:10000;background:radial-gradient(circle at 50% 42%,#06080f,#010207 82%);
@@ -2315,6 +2318,7 @@ section{position:relative;z-index:3;padding:clamp(70px,12vh,140px) 0}
 .seam::before{content:"";position:absolute;left:-4px;top:24px;width:7px;height:7px;border-radius:50%;background:#e8c06a;box-shadow:0 0 10px rgba(var(--kin),.8)}
 .seam .who{font-family:var(--serif);font-size:1.05rem;overflow-wrap:anywhere}.seam .who .arrow{color:#e8c06a;margin:0 8px}
 .seam .note{color:var(--ink2);font-style:italic;font-size:.92rem;max-width:64ch;margin-top:8px;overflow-wrap:anywhere}
+.seam .note.none{font-style:normal;color:var(--faint)}
 .seam .when{font-family:var(--mono);font-size:.6rem;color:var(--faint);margin-top:6px}
 
 /* doors */
@@ -2357,7 +2361,7 @@ footer .fh{font-family:var(--serif);font-size:1.1rem;color:rgba(var(--ai),.7);le
 
 <nav class="arena-nav" aria-label="sinovai">
   <a class="brand" href="/">sinovai \xB7 XENIA</a>
-  <span class="links"><a href="/xenia">framework</a><a href="/mac">this mac</a><a href="/?format=json">boundaries</a><a href="/house">the house's card</a></span>
+  <span class="links"><a href="/xenia">framework</a><a href="/mac">this mac</a><a href="/?format=json">boundaries</a><a href="/house">house</a></span>
 </nav>
 
 <!-- \u5E8F hero -->
@@ -2375,7 +2379,7 @@ footer .fh{font-family:var(--serif);font-size:1.1rem;color:rgba(var(--ai),.7);le
 <section id="gather"><div class="stage">
   <div class="eyebrow">01 \xB7 the gathering</div>
   <div class="kanji-head"><span class="k">\u8846</span><h2>records GET /agents returned</h2></div>
-  <p class="lede">Each card is one record GET /agents returned, from every page this view could read, in the order received. That order is the store's listing order (its provider documents a sort by key; not checked here). This source sorts nothing in this list: not GET /agents, and not this page. The order is not a rank. A card does not prove who submitted its record. Kind and freshness are self-declared text; freshness is not a measured heartbeat. No score is shown in this list; each record's JSON still carries <code>trust_score</code>, and <a href="/?format=json">the boundaries</a> name where scores remain.</p>
+  <p class="lede">Each card is one record GET /agents returned, from every page this view could read, in the order received. That order is the store's listing order (its provider documents a sort by key; not checked here). This source sorts nothing in this list: not GET /agents, and not this page. The order is not a rank. A card does not prove who submitted its record. Kind and freshness are self-declared text, except a kind marked (reconstructed), which is the house's reading of the card. The words line says how the house read the card; it is not the record's text. Freshness is not a measured heartbeat. No score is shown in this list; each record's JSON still carries <code>trust_score</code>, and <a href="/?format=json">the boundaries</a> name where scores remain.</p>
   <div class="tools"><label class="sr-only" for="q">Find an agent record</label><input id="q" type="search" placeholder="find a record by name\u2026" autocomplete="off" aria-describedby="agN"><span class="n" id="agN" role="status" aria-live="polite"></span></div>
   <noscript><p class="lede">This list is filled in by a script. Without it: GET /agents returns the same records as JSON, and while list_complete is false the next page is at ?cursor=&lt;next_cursor&gt;. Each record's page is /guests/&lt;name as stored&gt;.</p></noscript>
   <div class="field" id="agents"><div class="loading">\u2026</div></div>

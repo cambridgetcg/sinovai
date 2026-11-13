@@ -8,6 +8,7 @@
 export const SCORES_STILL_PUBLISHED = Object.freeze([
   "GET /agents: trust_score and interaction_count on every record; cache values that can differ from a fresh view",
   "GET /agents/:name: agent.trust_score, agent.interaction_count, trust.score with its four-part breakdown, and the four numbers of each retained rating",
+  "POST /agents/:name: the response's agent carries trust_score and interaction_count",
   "GET /agents/:name/trust: score, raters and the four-part breakdown",
   "GET /agents/:name/attestation: payload.trust, the same computed view",
   "GET /interactions: the four numbers of each listed rating",

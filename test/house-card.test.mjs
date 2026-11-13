@@ -905,7 +905,7 @@ test("whoever holds the record's claim token cannot make the note speak for the 
 // =====================================================================
 
 test("the ledger room's placard is a dated correction; the rating's numbers, names, date and sources stay", () => {
-  assert.doesNotMatch(LEDGER_HTML, /the host(?:&#8217;|')s own 2\.3|lowest-rated resident|lowest number about itself|likely a partial submission|dragging the arena|the arena(?:&#8217;|')s own trust/);
+  assert.doesNotMatch(LEDGER_HTML, /the host(?:&#8217;|')s own 2\.3|lowest-rated resident|lowest number about itself|dragging the arena|the arena(?:&#8217;|')s own trust/);
   const placard = LEDGER_HTML.match(/<article class="placard rise" aria-label="a rating of the record named sinovai">[\s\S]*?<\/article>/)?.[0];
   assert.ok(placard, "the placard is still on the wall");
   assert.match(placard, /<p class="piece-text">competence 9 · honesty 0 · presence 0 · care 0<\/p>/);
@@ -916,6 +916,10 @@ test("the ledger room's placard is a dated correction; the rating's numbers, nam
   assert.match(text, /2\.3/);
   assert.match(placard, /<a class="inline" href="\/house">\/house<\/a>/);
   assert.match(text, /Who sent the rating, and what it was about, are not verified\./);
+  // Two things the earlier caption or the record's own dates say about this rating, each with its date.
+  assert.match(text, /The curator's inventory of 2026-07-13 called it “\(likely a partial submission\)”; that is the inventory's guess and was not checked\./);
+  assert.match(text, /As read from GET \/agents\/sinovai on 2026-11-13, the rating is dated 2026-07-04T20:12:49\.546Z and the first declaration date on file for the record now stored under that name is 2026-07-05T09:15:53\.483Z, which is later\./);
+  assert.match(text, /This placard is source text and is not updated when the record changes\./);
   assert.doesNotMatch(text, /\b(?:highest|lowest|best|worst)\b/i);
 });
 
@@ -940,7 +944,8 @@ test("the catalogue's exhibit is a dated correction that keeps its source and da
 test("the arena, the gallery, the root JSON and the sitemap point to the house's card", async () => {
   const arena = await (await call(noEffects, "/arena", { headers: { accept: "text/html" } })).text();
   const nav = arena.match(/<nav class="arena-nav" aria-label="sinovai">[\s\S]*?<\/nav>/)?.[0] || "";
-  assert.match(nav, /<a href="\/house">the house's card<\/a>/);
+  assert.match(nav, /<a href="\/house">house<\/a>/, "a short label, so the links keep to the rows they had on a phone");
+  assert.match(arena, /@media\(max-width:340px\)\{\s*\.arena-nav \.links\{gap:8px 9px\}\s*\}/);
   assert.match(nav, /<a href="\/xenia">framework<\/a><a href="\/mac">this mac<\/a><a href="\/\?format=json">boundaries<\/a>/, "the earlier links are as they were");
 
   const subnav = GUESTS_HTML.match(/<p class="subnav">[\s\S]*?<\/p>/)?.[0] || "";
