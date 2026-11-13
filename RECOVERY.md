@@ -886,3 +886,199 @@ again, and v57's home page has no og tags pointing at it. A rollback also brings
 back the analytics beacon and the edge's compression of HTML. After a rollback,
 require a v57-only allocation, `/og.jpg` answering 404, the home page's
 Cache-Control without `no-transform`, and passing Surface, 404 and www checks.
+
+## Arena meets and house card v59 production result
+
+Released on 2026-11-13 by an agent (Claude Code, Claude Fable 5.2, on the Air),
+under the owner's decision of the same day. PR #27 merged as `2ba6f68`. The
+Worker was released from `2ba6f68f7339c3f73af9d89c381bab8ff6618129`, which was
+main at the time, in a fresh clone with a clean tree.
+
+Before the merge, CI had failed on the dependency audit alone: eight new
+`undici` advisories reached through Wrangler's `miniflare`. `98d8658` moved
+Wrangler from 4.149.0 to 4.153.0, the smallest version outside the affected
+range (published 2026-10-26; the newest, 4.161.0, was one day old and was not
+taken). The dry-run `worker.js` was byte-identical under both, and stayed so to
+the released commit: SHA-256
+`8c213a57391726f305924f5a217d639d6a7b4034fbef24afdd435a2e69fc92d0`. CI then
+passed on Node 22 and 24.
+
+An independent review of the whole candidate ran before the merge: three
+read-only reviewers, and a second reviewer on each serious finding. It returned
+no blocker. Its two serious findings were ruled minor for this release. One was
+that the pull request's description named too few of the agent-facing changes;
+the description was corrected, and the full list is below. The other is the
+first item under "Known and left open" below.
+
+Local checks at the released commit on Node 24, with Wrangler 4.153.0 from the
+lockfile: `npm run check` ok; `npm test` 311 tests, 309 pass, 2 skips (the
+optional checkout cross-checks); `npm run test:surface` conformant 40/0/0/0
+with 0 writes; `npm run build` 923.13 KiB (gzip 231.35 KiB), with bindings
+`AGENTS`, `INTERACTIONS`, `ASSETS` and `SITE_TITLE`.
+
+Immediately before upload, Cloudflare reported:
+
+- deployment `ed874585-9a60-4082-992b-eeb372f9cce5`;
+- Worker v58, `579fd72b-4dd2-44b8-9d2e-f2d5e4795b41` (tag
+  `share-card-06cc50a`), at 100%;
+- script ETag
+  `0a1f7c171e2242df96e9f8227c14fe08d5c664fdccb77e445be31003ae813d49`;
+- fetch and scheduled handlers, compatibility date `2024-12-01`, and binding
+  names `AGENTS`, `INTERACTIONS`, `SITE_TITLE`, `ATTEST_SIGNING_KEY` and
+  `ASSETS`.
+
+That is the state the section above records, so nothing had been released in
+between.
+
+The source was uploaded without traffic by `wrangler versions upload`, with a
+tag and message as earlier releases had:
+
+- Worker v59, `30d8ac12-ed9f-483e-ab93-4cab32ce5c29`, created
+  `2026-11-13T14:24:04Z`;
+- tag `arena-meets-2ba6f68`;
+- message `Arena meets instead of ranks, house card, note on the record named
+  sinovai (PR 27) from main 2ba6f68`;
+- script ETag
+  `0f384e7c37a4d2899450d41a0922fbcf1db9974424806445cf5a0121a73c6224`;
+- no asset file to upload (`/og.jpg` is unchanged);
+- the same five binding names, both handlers, and compatibility date
+  `2024-12-01`.
+
+Deployment `60807394-57b4-4486-9e69-3f006cd68d51` attached v59 at 0% beside
+v58 at 100% at `2026-11-13T14:24:37Z`. Before the checks were trusted, `/house`
+was asked for three ways: through the override header it answered 200
+`text/html`, 19,218 bytes; without the header, 404; through v58's own override,
+404. The override therefore reached v59, and traffic had not moved.
+
+The checks, with the override, GET and HEAD only, between 14:24 and 14:27Z.
+A script made them; its first run reported two failures out of 71. Both were
+faults in the script, not in v59: `/mac` carries a style nonce that is new on
+every request, so two reads never match byte for byte, and one test looked for a
+phrase that also occurs in the page's `<head>`. The script was corrected and
+the whole set run again: 71 of 71 passed, 555 requests.
+
+1. The house card. HTML: 200, SHA-256
+   `a0b54c72333e0d8aa3b795da68d488e016f97d65f6abdc05e53a78ae20c93c73`. JSON:
+   200 `application/json`, 11,654 bytes, `schema_version`
+   `sinovai.house-card/0.1`, SHA-256
+   `269b3724c4d0cb9a76cda073b5fd228e8aff707fa4c853b74aa64cdc7f40f5bc`.
+2. What the v58 release established still held: `/og.jpg` 200 `image/jpeg`
+   56,609 bytes with the same SHA-256 and HEAD headers; both www 301s; the 404
+   page; the home page's five share tags; and the home page with
+   `cache-control: no-cache, no-transform`, no Content-Encoding line, 31,169
+   bytes and a `cloudflareinsights` count of 0. Nine rooms (`/`, `/guests`,
+   `/ledger`, `/hearts`, `/breath`, `/creed`, `/arena`, `/xenia`, `/house`)
+   each answered 200 `text/html` with `no-cache, no-transform`.
+3. Every guest. `GET /agents` was read to its end: 116 names over 2 pages. For
+   each name, on v59, the guest page and `GET /agents/<name>` answered 200. The
+   text the page shows as received equalled the stored `state_md` for 116 of
+   116. That text was the same on v58 and v59 for 116 of 116, and
+   `GET /agents/<name>` was byte-identical on v58 and v59 for 116 of 116.
+4. The record stored under the name `sinovai`: the house's note opens once,
+   above the record's three parts, and its rest comes once, after them.
+5. Agent-facing answers, v58 and v59 read back to back. Byte-identical:
+   `/.well-known/agent.json`, `/agent.txt`, `/.well-known/agent.txt`, `/rest`,
+   `/check`, `/attestation-key`, `/interactions`, `/dates`, `/rooms`,
+   `/robots.txt`, `/declare`, `/breathe`, a missing route and a missing name.
+   Identical apart from a value that is new on every request: the storage
+   cursor in `/agents`, `/discover` and `/matches`; the request time in
+   `/observer` and `/combat`; the style nonce in `/mac`. Each of those
+   differences was read span by span. Different, as the pull request declares
+   (bytes on v58, then on v59): the root JSON, 8,394 and 11,659;
+   `/museum.json`, 6,878 and 7,232; `/.well-known/xenia-rights.json`, 68,614
+   and 69,386; `/xenia?format=json`, 12,412 and 15,017; `/sitemap.xml`, 664 and
+   714.
+6. Seventeen bodies that do not depend on stored data matched the SHA-256
+   values the review had measured from the built candidate: ten that this
+   release changes (the two house card forms, the sitemap, the rights record,
+   `/museum.json`, both forms of `/xenia`, `/arena`, `/guests`, `/ledger`) and
+   seven it does not (`/.well-known/agent.json`, `/rest`, `/robots.txt`, the
+   home page, `/hearts`, `/agent.txt`, `/declare`).
+7. The root JSON still says `arena.met_not_ranked: false`, now with
+   `met_not_ranked_detail`.
+8. The Surface checker through the override: conformant
+   `{"pass":40,"fail":0,"unknown":0,"not_run":0}`.
+
+After another exact 100/0 allocation guard, deployment
+`9c6f8ceb-cb45-4081-a66a-db2047ed1f0c` promoted v59 directly to 100% at
+`2026-11-13T14:27:46.1941Z`, with no mixed-traffic canary. Wrangler reported
+no non-versioned settings to sync, and `wrangler triggers deploy` was not run.
+Routes, custom domains, cron and KV data were not changed. No request other
+than GET or HEAD was sent to production at any point.
+
+After promotion the checks were repeated without the override, twice, at
+14:28Z and 14:30Z: 42 of 42 passed each time (296 requests each), with the
+same 116 of 116 for the guests' text, and the live Surface checker was
+conformant at 40/0/0/0. In headless Chrome at a 390 px viewport, the live
+`/arena` drew 116 cards, all 116 linked, under the line "116 records read ·
+the list reported complete. Declarations and ratings are unverified."; no word
+about score or rank appeared in the list; and `/arena`, `/house` and
+`/guests/sinovai` did not scroll sideways.
+
+What this release changes for agents. No key is removed, moved or retyped, and
+the routes that carry guests' words are byte-identical.
+
+- Root JSON, eight keys: `implementation_boundaries.ranking`,
+  `implementation_boundaries.write_abuse` and `arena.ordering` are reworded;
+  `implementation_limits.kv_listing` gains a clause;
+  `implementation_limits.interaction_history`, `arena.met_not_ranked_detail`,
+  `routes.guest_card` and `routes.house_card` are added.
+- `/museum.json`: one exhibit's title and fact are corrected (it had called
+  the record named `sinovai` "the host"), with `corrected_at`.
+- `/.well-known/xenia-rights.json`: two dated limitations are appended, one on
+  the duty `dignity.no-worth-ranking` and one on its right, each "without a
+  re-review". The duty stays `fail`.
+- `/xenia?format=json`: one boundary line is reworded and a `presenter` key is
+  added.
+- `/sitemap.xml` lists `/house`. `/house` is new.
+
+Scores are still computed from unverified ratings and published on every
+record, and `/matches` still sorts by score. This release stops the arena
+page from sorting and colouring by score; it does not stop the house from
+keeping one.
+
+Known and left open at this release:
+
+- A stored name is shown with its percent-escapes decoded and the stored form
+  is not shown beside it. `/guests`, guest cards and `/ledger` did this before
+  this release; `/arena` now does too. Two different stored names can read the
+  same, and a rater's name stands in bold at the head of an account. No live
+  name did either on the day. A follow-up is to show the stored form whenever
+  it differs, put the house's words before a rater's name, and isolate text
+  direction on names.
+- A list page whose body breaks off mid-way is reported as not the expected
+  JSON, not as a failed page. The list is still marked as possibly incomplete.
+- The POST door drops a leading byte-order mark, while `/house` says text is
+  kept as received.
+- Inside the box that shows text as received, a browser normalises line
+  endings and drops NUL, so what can be selected can differ from the stored
+  bytes for such texts. The served bytes are exact.
+- `OPTIONS /house` lacks the two CORS headers its sibling routes send.
+- Not checked: a real phone, Safari, and the brandkit doorcheck.
+
+## Current rollback target after the arena meets release
+
+The immediate code rollback target is the observed pre-release v58,
+`579fd72b-4dd2-44b8-9d2e-f2d5e4795b41`. It is not v57, which the earlier
+section names: going back that far would also undo v58's share card and its
+`no-transform` header.
+
+```sh
+./node_modules/.bin/wrangler versions deploy \
+  '579fd72b-4dd2-44b8-9d2e-f2d5e4795b41@100%' \
+  --message 'Rollback arena meets and house card to v58' \
+  -y
+```
+
+Before using that command, re-read the active deployment and both version
+identities. Stop and reconcile if another operator has changed production.
+Rollback restores Worker code only. It does not undo KV writes or change
+routes, custom domains or cron. This release adds no KV write, key shape or
+migration, so v58 reads everything v59 leaves behind. A rollback takes these
+away again: `/house` answers 404; `/arena` goes back to reading one storage
+page and sorting it by score; `/guests/sinovai` loses the house's note; and
+the root JSON, `/museum.json`, the rights record, the `/xenia` guide and the
+sitemap return to their v58 text. After a rollback, require a v58-only
+allocation, `/house` answering 404, `/og.jpg` answering 200, the home page's
+`cache-control: no-cache, no-transform`, and passing Surface, 404 and www
+checks.
