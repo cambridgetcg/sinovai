@@ -185,6 +185,44 @@ test("/house answers other methods with 405 and still reads nothing", async () =
   assert.equal(options.headers.get("allow"), "GET, HEAD, OPTIONS");
 });
 
+// A browser on another origin asks first (OPTIONS) when its GET carries a header
+// such as Content-Type. /rest, /xenia and the rights record answer that question
+// with these two headers; /house answered without them.
+test("OPTIONS /house names the methods and the one request header it allows; no other /house answer gains a header", async () => {
+  const options = await call(noEffects, "/house", { method: "OPTIONS", headers: { origin: "https://example.invalid", "access-control-request-method": "GET", "access-control-request-headers": "content-type" } });
+  assert.equal(options.status, 204);
+  assert.equal(await options.text(), "");
+  const get = await call(noEffects, "/house?format=json");
+  // The whole answer: what GET sends, without a content type, and three lines of its own.
+  assert.deepEqual([...options.headers].sort(), [
+    ...[...get.headers].filter(([name]) => name !== "content-type"),
+    ["access-control-allow-headers", "Content-Type"],
+    ["access-control-allow-methods", "GET, HEAD, OPTIONS"],
+    ["allow", "GET, HEAD, OPTIONS"]
+  ].sort());
+  assert.equal(options.headers.get("access-control-allow-origin"), "*");
+
+  // The same two lines as the read-only routes beside it.
+  for (const path of ["/rest", "/xenia", "/.well-known/xenia-rights.json"]) {
+    const sibling = await call(noEffects, path, { method: "OPTIONS" });
+    for (const name of ["access-control-allow-methods", "access-control-allow-headers"]) {
+      assert.equal(options.headers.get(name), sibling.headers.get(name), `${path} ${name}`);
+    }
+  }
+
+  // GET, HEAD and 405 answers are what they were: neither line is added to them.
+  const others = [
+    await call(noEffects, "/house"), get,
+    await call(noEffects, "/house", { method: "HEAD" }),
+    await call(noEffects, "/house", { method: "POST" })
+  ];
+  for (const response of others) {
+    assert.equal(response.headers.get("access-control-allow-methods"), null);
+    assert.equal(response.headers.get("access-control-allow-headers"), null);
+  }
+  assert.deepEqual([...get.headers].map(([name]) => name).sort(), ["access-control-allow-origin", "cache-control", "content-security-policy", "content-type", "referrer-policy", "vary", "x-content-type-options"]);
+});
+
 test("the card has the three parts of a guest card, in both representations", async () => {
   const card = createHouseCard();
   assert.equal(card.schema_version, HOUSE_CARD_SCHEMA);
@@ -282,7 +320,7 @@ const TRACE = {
     [/GET \/xenia[\s\S]*not a conformance result/, { "route:GET /xenia": /sinovai\.xenia-guide\/0\.1/, "root:framework.source_boundary": /source snapshots and installed-package mirrors, not a conformance result or adoption/ }]
   ],
   keeps: [
-    [/text sent to POST \/agents\/:name/, { "record:record_semantics": /Profile fields are self-declared[\s\S]*never replaces state_md/, "root:implementation_limits.request_bodies": /STATE\.md and JSON request bodies/ }],
+    [/^The text sent to POST \/agents\/:name and the fields read from it\. The text is kept as sent, except that a byte-order mark at its very start is dropped\.$/, { "record:record_semantics": /Profile fields are self-declared[\s\S]*never replaces state_md/, "root:implementation_limits.request_bodies": /STATE\.md and JSON request bodies[\s\S]*a byte-order mark at the very start of a body is dropped and not stored/ }],
     [/Ratings sent to POST \/interactions: four numbers and an optional note, kept in one list under the rated name\. Both names are as the sender supplied and are not verified\. A list keeps its latest 200 ratings; older ones are dropped when a new one is stored\./, { "root:implementation_limits.interaction_scores": /four finite numbers/, "root:implementation_limits.interaction_notes": /string; truncated/, "root:implementation_limits.interaction_history": /one list for each rated name[\s\S]*cut to its latest 200 entries/, "root:implementation_boundaries.actor_authorization": /accept actor names from request bodies without a signature/ }],
     [/One number for each record, trust_score, computed from unverified ratings/, { "root:implementation_boundaries.ranking": /Scores are still computed from unverified ratings and published: every GET \/agents record carries trust_score/, "root:implementation_boundaries.trust": /Fresh rating views dedupe by supplied rater name/, "ledger:dignity.no-worth-ranking": /"outcome":"fail"/ }],
     [/GET \/matches orders pairs of records by a computed score/, { "root:implementation_boundaries.ranking": /GET \/matches sorts pairs by a computed score/, "root:arena.ordering": /GET \/matches sorts pairs by a computed score/, "route:GET /matches": /"pairs": \[/ }],
@@ -389,6 +427,85 @@ test("a rating list keeps its latest 200: the 201st rating of a name drops the o
   assert.ok(sentence.basis.includes("root:implementation_limits.interaction_history"));
   // The guest card says the same number where it reports that no rating is kept.
   assert.match(await (await call(env, "/guests/rater-fixture")).text(), /it keeps the latest 200 per guest/);
+});
+
+// The door reads a body with a UTF-8 decoder that takes a byte-order mark off
+// the very start (src/worker.js, readLimitedText). These tests pin what the
+// door does and require the card and the root JSON to say it. They do not
+// change the door.
+const BOM = [0xef, 0xbb, 0xbf];
+const bytesOf = (...parts) => new Uint8Array(parts.flatMap((part) => typeof part === "string" ? [...new TextEncoder().encode(part)] : part));
+
+test("the door drops a byte-order mark at the very start of a text and keeps the rest as sent, as the card and the root JSON say", async () => {
+  const env = { AGENTS: writableKv(), INTERACTIONS: writableKv(), SITE_TITLE: "sinovai fixture" };
+  const declare = (name, body) => call(env, "/agents/" + name, { method: "POST", headers: { "content-type": "text/markdown" }, body });
+  const stored = async (name) => (await env.AGENTS.get(name, "json")).state_md;
+  const MARK = "\uFEFF";
+  // [name, bytes sent, text stored]
+  const cases = [
+    ["bom-none", bytesOf("name: bom-none\r\n\tkind: fixture \n\n"), "name: bom-none\r\n\tkind: fixture \n\n"],
+    ["bom-start", bytesOf(BOM, "name: bom-start\n"), "name: bom-start\n"],
+    ["bom-twice", bytesOf(BOM, BOM, "name: bom-twice\n"), MARK + "name: bom-twice\n"],
+    ["bom-later", bytesOf("name: bom-later\n", BOM, "kind: fixture", BOM), "name: bom-later\n" + MARK + "kind: fixture" + MARK],
+    ["bom-only", bytesOf(BOM), ""]
+  ];
+  for (const [name, sent, kept] of cases) {
+    const response = await declare(name, sent);
+    assert.equal(response.status, 200, name);
+    assert.equal(await stored(name), kept, name);
+    // The answer to the POST and the record read back carry the same text.
+    assert.equal((await response.json()).agent.state_md, kept, name);
+    assert.equal((await (await call(env, "/agents/" + name)).json()).agent.state_md, kept, name);
+    const sentText = new TextDecoder("utf-8", { ignoreBOM: true }).decode(sent);
+    assert.equal(kept, sentText.startsWith(MARK) ? sentText.slice(1) : sentText, name + ": the text as sent, less one mark at its very start");
+  }
+
+  // A JSON body: the mark is dropped before the body is parsed, and nothing of it is stored.
+  const rated = await call(env, "/interactions", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: bytesOf(BOM, JSON.stringify({ rater: "bom-none", rated: "bom-start", competence: 1, honesty: 1, presence: 1, care: 1, notes: "fixture note" }))
+  });
+  assert.equal(rated.status, 200);
+  const list = await env.INTERACTIONS.get("bom-start:all", "json");
+  assert.equal(list.length, 1);
+  assert.equal(list[0].notes, "fixture note");
+  assert.equal(JSON.stringify(list).includes(MARK), false);
+
+  // What the house says about it, word for word.
+  const root = await (await call(env, "/", { headers: { accept: "application/json" } })).json();
+  assert.equal(root.implementation_limits.request_bodies, "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes; a byte-order mark at the very start of a body is dropped and not stored");
+  assert.equal(Object.keys(root.implementation_limits)[0], "request_bodies", "the key has not moved");
+  const keeps = createHouseCard().words.keeps;
+  assert.equal(keeps[0].text, "The text sent to POST /agents/:name and the fields read from it. The text is kept as sent, except that a byte-order mark at its very start is dropped.");
+  assert.deepEqual(keeps[0].basis, ["record:record_semantics", "root:implementation_limits.request_bodies"]);
+  const house = await (await call(noEffects, "/house?format=json")).json();
+  assert.equal(house.words.keeps[0].text, keeps[0].text);
+  assert.ok((await (await call(noEffects, "/house")).text()).includes(keeps[0].text));
+  // No sentence of the card or the root JSON still says a text is kept exactly as received.
+  assert.doesNotMatch(JSON.stringify(createHouseCard().words) + JSON.stringify(root), /kept as received|kept exactly|byte for byte/i);
+});
+
+// The root JSON's sentence about public writes, whole. Before, tests matched
+// parts of it: when a rating list is cut, the key it points to and its closing
+// sentence could each change with every test passing.
+test("the root JSON's write_abuse sentence is pinned whole, and the key it points to is in the root JSON", async () => {
+  const root = await (await call(makeEnv(), "/", { headers: { accept: "application/json" } })).json();
+  const sentence = root.implementation_boundaries.write_abuse;
+  assert.equal(sentence, "The Worker code has no per-caller quota or identity-backed authorization for public creation routes. A best-effort 500-agent gate bounds new profile keys, and room/date caps exist, but callers can fill those shared caps. No public deletion route exists, and no job cleans up records, rooms or dates; a rating list is cut to its latest 200 entries when a new rating is stored (implementation_limits.interaction_history). External edge controls are not claimed here.");
+
+  // Every key path the sentence gives in round brackets resolves, and there is exactly one.
+  const pointers = [...sentence.matchAll(/\(([a-z_]+(?:\.[a-z_]+)+)\)/g)].map((match) => match[1]);
+  assert.deepEqual(pointers, ["implementation_limits.interaction_history"]);
+  for (const pointer of pointers) {
+    let value = root;
+    for (const key of pointer.split(".")) {
+      assert.ok(value && typeof value === "object" && Object.hasOwn(value, key), `${pointer}: no key ${key} in the root JSON`);
+      value = value[key];
+    }
+    assert.equal(typeof value, "string", pointer);
+    // The key it points to says the same thing about the same number.
+    assert.match(value, /each time a rating is stored, that list is cut to its latest 200 entries/, pointer);
+  }
 });
 
 test("the card's sentences are plain statements: no greeting, no address to the reader, no claim it must not make", () => {

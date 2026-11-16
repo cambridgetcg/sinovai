@@ -620,6 +620,31 @@ test("/arena copy says what the list is, what orders it, and where scores remain
   assert.match(noscript, /\/guests\/&lt;name as stored&gt;/);
 });
 
+// The seal is an old decoration: one character in a box, fixed to the bottom
+// left of the window. On a window narrower than the list's column plus the
+// seal it lay over the list's text. This pins the style rule only. Where a
+// browser draws the seal was looked at in headless Chrome, in a scratch run
+// that is not a committed test.
+const SEAL_NARROW_RULE = "@media(max-width:1200px){body{position:relative}#hanko{position:absolute}}";
+
+test("/arena: the seal is fixed to the window only above 1200px; at that width or less it sits at the foot of the page", async () => {
+  const html = await servedArena();
+  const styles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((match) => match[1]);
+  assert.equal(styles.length, 1);
+  const [style] = styles;
+  const base = style.indexOf("#hanko{position:fixed;bottom:22px;left:22px;");
+  assert.ok(base !== -1, "the seal keeps its place for a wide window");
+  assert.equal(style.split(SEAL_NARROW_RULE).length - 1, 1);
+  assert.ok(style.indexOf(SEAL_NARROW_RULE) > base, "the narrow rule comes after the rule it changes");
+  assert.equal(style.split("#hanko{").length - 1, 2, "the seal has these two rules and no other");
+  // The rule also makes the body the box the seal is placed against. In the scratch run, the only
+  // other element placed against the body was the nav, which sits at the top either way, and no
+  // element but the seal changed place.
+  assert.equal(style.split("body{position:relative}").length - 1, 1);
+  // It stays a decoration: one element, not read out.
+  assert.equal(html.split('<div id="hanko" aria-hidden="true">').length - 1, 1);
+});
+
 test("/arena uses no superlative and no rank word except to say the order is not a rank", async () => {
   const text = visibleText(await servedArena());
   assert.ok(text.includes("The order is not a rank"), "the one place the word appears");

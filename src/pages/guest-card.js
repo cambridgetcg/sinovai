@@ -2,9 +2,10 @@
 // Three parts with equal standing for every guest (Astra's design, 2026-10-19):
 // their words, accounts of encounters, and what remains unknown.
 //
-// One record can also carry a note from the house above those parts: the
-// record stored under the house's own name (src/house.js). The note is the
-// house's text, marked as a proposal, and it is not part of the record.
+// One record can also carry a note from the house: the record stored under the
+// house's own name (src/house.js). Two lines of it, holding four sentences, and
+// a pointer to the rest stand above those parts; the rest comes after them. The
+// note is the house's text, marked as a proposal, and it is not part of the record.
 //
 // A stored name, the guest's or a rater's, is shown by the rule in
 // src/names.js, in an element of its own. The addresses, the data line and the
@@ -121,8 +122,8 @@ const NOTE_STYLE = `.housenote{margin:2.4rem 0 0;line-height:1.55}
 // contest } from houseNoteFor, or null. The note is put on the page in two
 // pieces so that the guest's words come before most of the house's.
 //
-// houseNoteLead goes above the record: the two lead sentences and a link to
-// the rest. It carries nothing from the record's text.
+// houseNoteLead goes above the record: the two lead lines, which hold four
+// sentences, and a pointer to the rest. It carries nothing from the record's text.
 // houseNoteRest goes after the record's three parts: the remaining sentences
 // as a list. The start of the record's text is not inside any sentence: it
 // goes in a blockquote of its own under the line that introduces it, so a

@@ -740,6 +740,8 @@ test("/hearts pairs: each name in its own element with the stored form after a r
 
 const ARENA_NAME_RULES = "/* names: one element each (src/names.js) */\n" + NAME_STYLE + "\n.st{font-family:var(--mono);font-size:.64rem;color:var(--ink2)}\n.seam .who a .n{text-decoration:inherit}\n";
 const ARENA_RULE_PARAGRAPH = `  <p class="lede">${NAME_RULE_TEXT}</p>\n`;
+// The seal's rule for a window of 1200px or less (test/arena-meets.test.mjs pins it).
+const ARENA_SEAL_RULE = "@media(max-width:1200px){body{position:relative}#hanko{position:absolute}}\n";
 const GUESTS_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n";
 const GUESTS_DOOR_SENTENCE = "A door opens onto that guest's card when its stored name is a usable address.";
 const GUESTS_RULE_PARAGRAPH = `    <p class="glyphs rise">${NAME_RULE_TEXT} On this wall the brackets are in the label under each door.</p>\n`;
@@ -881,11 +883,13 @@ test("a guest card for plain names is the card as it was, apart from seven liste
   assert.equal(sha256(html), BEFORE.card);
 });
 
-test("the four list pages' markup and style are what they were, apart from the name rules, the two paragraphs that state the rule, and one sentence about doors", async () => {
+test("the four list pages' markup and style are what they were, apart from the name rules, the two paragraphs that state the rule, one sentence about doors, and the arena seal's rule for narrow windows", async () => {
   const still = (html) => { const script = pageScript(html); return html.replace("<script>" + script + "</script>", () => "<script></script>"); };
   let arena = still(await servedArena());
   arena = without(arena, ARENA_NAME_RULES, 1, "/arena name rules");
   arena = without(arena, ARENA_RULE_PARAGRAPH, 1, "/arena rule paragraph");
+  // The seal is fixed to the window only above 1200px; at that width or less it sits at the foot of the page.
+  arena = without(arena, ARENA_SEAL_RULE, 1, "/arena seal rule");
   assert.equal(sha256(arena), BEFORE.static["/arena"]);
 
   let guests = still(GUESTS_HTML);

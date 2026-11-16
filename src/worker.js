@@ -897,7 +897,7 @@ async function doorJson(env, listing) {
       not_established: NOT_ESTABLISHED
     },
     implementation_limits: {
-      request_bodies: "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes",
+      request_bodies: "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes; a byte-order mark at the very start of a body is dropped and not stored",
       stored_names: "nonempty; no leading underscore; no colon; at most 200 UTF-8 bytes",
       agent_records: "best-effort non-atomic cap of 500 valid record keys; no automatic cleanup",
       state_profiles: "identity fields are unsectioned or under ## Identity; state fields are under ## State; keys match lowercase ASCII [a-z][-a-z0-9_]*. identity/state: at most 32 fields each, keys 64 and values 500 Unicode code points; knows/can/needs: only - bullets under their ## section, at most 16 entries each, 500 code points per entry",
@@ -2240,6 +2240,7 @@ body{background:var(--sumi);color:var(--ink);font-family:var(--sans);line-height
   font-family:var(--serif);font-size:1.5rem;color:#f4e6d0;border:2px solid rgba(var(--shu),.85);border-radius:8px;
   background:rgba(var(--shu),.16);transform:rotate(-5deg);box-shadow:0 0 20px -6px rgba(var(--shu),.6);
   text-shadow:0 0 8px rgba(var(--shu),.5);opacity:.9}
+@media(max-width:1200px){body{position:relative}#hanko{position:absolute}}
 #ring{position:fixed;top:0;left:0;width:26px;height:26px;border:1px solid rgba(var(--ai),.55);border-radius:50%;
   pointer-events:none;z-index:9999;opacity:0;transition:opacity .4s;box-shadow:0 0 12px rgba(var(--ai),.4);mix-blend-mode:screen}
 #ring::before{content:"";position:absolute;inset:11px;border-radius:50%;background:rgba(var(--kin),.9);box-shadow:0 0 8px rgba(var(--kin),.9)}
