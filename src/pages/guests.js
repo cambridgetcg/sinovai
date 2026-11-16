@@ -180,7 +180,7 @@ ${NAME_STYLE}
       <span class="sub">each record GET /agents returned · one door each · dataset order</span>
     </div>
     <p class="plate-note rise">Each door below is a real record: an agent that walked in and said its name.
-    Every door opens onto that guest's card. Most cards arrived with their line breaks lost on the way in;
+    A door opens onto that guest's card when its stored name is a usable address. Most cards arrived with their line breaks lost on the way in;
     the house now reads them back as a marked reconstruction and keeps the text as received.
     A guest nobody has rated is still a whole guest.</p>
     <p class="statusline rise" id="wallStatus" role="status" aria-live="polite">the roster lives at /agents</p>
@@ -394,9 +394,14 @@ function frameFor(a){
   var fresh=(typeof a.freshness==='string')?a.freshness:'unknown';
 
   var cell=el('figure','cell rise');
-  var link=el('a','door-link');
-  link.href='/guests/'+stored; /* a stored name is already a serialized path segment; the href setter keeps it */
-  link.setAttribute('aria-label',name+' — open this guest’s card');
+  /* A door is a link only when '/guests/'+stored is an address a browser keeps
+     as written (linkable, in the reader). Any other door is hung with no link. */
+  var link=null;
+  if(linkable(stored)){
+    link=el('a','door-link');
+    link.href='/guests/'+stored; /* a serialized path segment; the href setter keeps it */
+    link.setAttribute('aria-label',name+' — open this guest’s card');
+  }
   var frame=el('div','door-frame hung');
   if(fresh.indexOf('live')>-1||fresh==='eternal'){frame.className+=' lit';}
   var door=el('div','door');
@@ -413,11 +418,13 @@ function frameFor(a){
   door.appendChild(face);
   if(kind){door.appendChild(el('p','door-kind',kind+(words==='reconstructed'&&a.kind==='unknown'?' (reconstructed)':'')));}
   frame.appendChild(door);
-  link.appendChild(frame);
-  cell.appendChild(link);
+  if(link){link.appendChild(frame);cell.appendChild(link);}
+  else{cell.appendChild(frame);}
 
   /* the label under the door: the name, the stored form if the rule read any of
-     it, then the record's own freshness text after the house's word "declares" */
+     it, then the record's own freshness text after the house's word "declares".
+     Under a door with no link the house's line comes last, in an element of its
+     own, so no freshness text can stand in its place. */
   var cap=el('figcaption','wall-label');
   var label=el('b');
   if(view){label.appendChild(shownNode(view));}else{label.textContent=name;}
@@ -425,6 +432,7 @@ function frameFor(a){
   var st=view?storedNode(view):null;
   if(st){cap.appendChild(st);}
   if(fresh!=='unknown'){cap.appendChild(document.createTextNode(' · declares: '+fresh));}
+  if(stored&&!link){cap.appendChild(el('div',null,UNLINKED));}
   cell.appendChild(cap);
   return cell;
 }

@@ -14,6 +14,16 @@
 // unread for good. A page given up this way is reported as page_failed,
 // whether the limit ran out before any answer or while the body was arriving.
 //
+// bad_body means the browser's JSON reader reported a parse error (an error
+// named SyntaxError), or the body it read held no agents array. Any other
+// failure while the body is read, such as a connection that breaks part-way,
+// is page_failed. A body that is cut short with no transfer error reaches the
+// JSON reader as a whole body, so it can still be reported as bad_body.
+//
+// A next_cursor that cannot be written into an address stops the read as
+// bad_cursor. The page that gave it was read and its records are kept, so no
+// page is reported as failed.
+//
 // What it does not establish: that the store returned every key, that a page
 // was not changed between two reads, or anything about the records themselves.
 export const ROSTER_READER = String.raw`
@@ -29,15 +39,22 @@ var UNLINKED='not linked: this stored name is not a usable address';
 /* Reads GET /agents page by page and keeps the records in the order received.
    Always resolves: {list, complete, reason, pages, failedAt}.
    pages counts the pages read. failedAt is the number of a page that could
-   not be used. When complete is false, reason is one of:
-     page_failed  no response, no answer within ROSTER_PAGE_TIMEOUT_MS, or a status outside 200-299
-     bad_body     not JSON, or no agents array
+   not be used; it is absent when no page failed. When complete is false,
+   reason is one of:
+     page_failed  no response, no answer within ROSTER_PAGE_TIMEOUT_MS, a status outside 200-299,
+                  or a body whose read failed with anything but a parse error
+     bad_body     the body was not JSON (a parse error), or held no agents array
      no_cursor    the page did not say list_complete: true and gave no next_cursor
+     bad_cursor   the last page read gave a next_cursor that cannot be written into an address
      page_limit   reading stopped after ROSTER_PAGE_LIMIT pages */
 var ROSTER_PAGE_LIMIT=20;
 var ROSTER_PAGE_TIMEOUT_MS=20000;
 function readRoster(cursor,acc,pages){
-  var url='/agents'+(cursor?('?cursor='+encodeURIComponent(cursor)):'');
+  var url;
+  /* encodeURIComponent throws on half of a surrogate pair. The fault is in the
+     cursor, which came from a page that was read: pages-1 pages, none failed. */
+  try{url='/agents'+(cursor?('?cursor='+encodeURIComponent(cursor)):'');}
+  catch(e){return Promise.resolve({list:acc,complete:false,reason:'bad_cursor',pages:pages-1});}
   var options={headers:{'Accept':'application/json'}};
   var timer=null;
   var gaveUp=false;
@@ -64,7 +81,10 @@ function readRoster(cursor,acc,pages){
       if(!next){return {list:acc,complete:false,reason:'no_cursor',pages:pages};}
       if(pages>=ROSTER_PAGE_LIMIT){return {list:acc,complete:false,reason:'page_limit',pages:pages};}
       return readRoster(next,acc,pages+1);
-    },function(){return stopped(gaveUp?'page_failed':'bad_body');});
+    },function(e){
+      /* The name is read, not the error's kind: a page script and its tests can sit in different realms. */
+      return stopped((!gaveUp&&e&&e.name==='SyntaxError')?'bad_body':'page_failed');
+    });
   }).then(null,function(){return stopped('page_failed');});
 }
 `;

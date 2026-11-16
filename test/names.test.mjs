@@ -645,9 +645,11 @@ test("/guests doors: the face and the spoken label carry the name alone; the lab
   const g = runGallery(pageScript(GUESTS_HTML), hostileRoutes);
   await settle();
   const doors = g.doors().map((cell) => {
-    const [link, caption] = cell.children;
-    const face = link.children[0].children[0].children.find((node) => node.className === "door-name");
-    return { href: link.href, spoken: link.attributes["aria-label"], face: shape(face), caption: shape(caption).nodes, read: caption.textContent };
+    // A door with a link is hung inside it; a door with none is hung in the cell itself.
+    const [first, caption] = cell.children;
+    const frame = first.tagName === "A" ? first.children[0] : first;
+    const face = frame.children[0].children.find((node) => node.className === "door-name");
+    return { href: first.href, spoken: first.attributes["aria-label"], face: shape(face), caption: shape(caption).nodes, read: caption.textContent };
   });
   const face = (shown) => ({ tag: "H3", cls: "door-name", nodes: [bdi(shown)] });
   const b = (shown) => ({ tag: "B", nodes: [bdi(shown)] });
@@ -661,8 +663,12 @@ test("/guests doors: the face and the spoken label carry the name alone; the lab
     { href: "/guests/" + NAMES.headingEscaped, spoken: NAMES.headingEscaped + open, face: face(NAMES.headingEscaped), caption: [b(NAMES.headingEscaped)], read: NAMES.headingEscaped },
     // A freshness that copies the house's bracket stands after "declares: ", outside the name's bold.
     { href: "/guests/sinovai", spoken: "sinovai" + open, face: face("sinovai"), caption: [b("sinovai"), " · declares: " + FRESHNESS_THAT_COPIES_THE_HOUSE], read: "sinovai · declares: " + FRESHNESS_THAT_COPIES_THE_HOUSE },
-    // Not an address a browser keeps as written. The gallery still links every door (review finding GW-4, not closed here).
-    { href: "/guests/" + NAMES.overrideRaw, spoken: "[U+202E]nialp" + open, face: face("[U+202E]nialp"), caption: [b("[U+202E]nialp"), ST_ONE_CODE], read: "[U+202E]nialp (1 character shown as a code in square brackets)" }
+    // Not an address a browser keeps as written: the door has no link and no spoken label, and the house says so last, in its own element.
+    {
+      href: undefined, spoken: undefined, face: face("[U+202E]nialp"),
+      caption: [b("[U+202E]nialp"), ST_ONE_CODE, { tag: "DIV", nodes: [UNLINKED] }],
+      read: "[U+202E]nialp (1 character shown as a code in square brackets)" + UNLINKED
+    }
   ]);
   assert.equal(doors.filter((door) => door.face.nodes[0].nodes[0] === "sinovai").length, 1, "one door reads sinovai");
   for (const door of doors) assert.equal(UNSEEN.test(door.read + door.spoken + JSON.stringify(door.face)), false);
@@ -735,6 +741,7 @@ test("/hearts pairs: each name in its own element with the stored form after a r
 const ARENA_NAME_RULES = "/* names: one element each (src/names.js) */\n" + NAME_STYLE + "\n.st{font-family:var(--mono);font-size:.64rem;color:var(--ink2)}\n.seam .who a .n{text-decoration:inherit}\n";
 const ARENA_RULE_PARAGRAPH = `  <p class="lede">${NAME_RULE_TEXT}</p>\n`;
 const GUESTS_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n";
+const GUESTS_DOOR_SENTENCE = "A door opens onto that guest's card when its stored name is a usable address.";
 const GUESTS_RULE_PARAGRAPH = `    <p class="glyphs rise">${NAME_RULE_TEXT} On this wall the brackets are in the label under each door.</p>\n`;
 const LEDGER_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n.lr-head .st{color:var(--dim);font-weight:400}\n";
 const HEARTS_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n.pair-names .st{font-family:var(--mono);font-size:.66rem;font-weight:400;color:var(--dim)}\n";
@@ -845,7 +852,7 @@ function without(text, piece, times, label) {
   return text.split(piece).join("");
 }
 
-test("a guest card for plain names is the card as it was, apart from six listed changes", async () => {
+test("a guest card for plain names is the card as it was, apart from seven listed changes", async () => {
   let html = await card(plainCardStore(), PLAIN_CARD_PATH);
   // 1. The name rules in the style.
   html = without(html, CARD_NAME_RULES, 1, "the name rules");
@@ -866,10 +873,15 @@ test("a guest card for plain names is the card as it was, apart from six listed 
   });
   assert.equal(heads, 4);
   assert.equal(undated, 1);
+  // 7. A line feed of the house's follows the start tag of the box that holds the text as received
+  //    (src/pages/guest-card.js, receivedBox): an HTML parser drops one line feed there.
+  assert.equal(html.split("<pre>").length - 1, 1);
+  assert.equal(html.split("<pre>\n").length - 1, 1);
+  html = html.replace("<pre>\n", "<pre>");
   assert.equal(sha256(html), BEFORE.card);
 });
 
-test("the four list pages' markup and style are what they were, apart from the name rules and the two paragraphs that state the rule", async () => {
+test("the four list pages' markup and style are what they were, apart from the name rules, the two paragraphs that state the rule, and one sentence about doors", async () => {
   const still = (html) => { const script = pageScript(html); return html.replace("<script>" + script + "</script>", () => "<script></script>"); };
   let arena = still(await servedArena());
   arena = without(arena, ARENA_NAME_RULES, 1, "/arena name rules");
@@ -879,6 +891,9 @@ test("the four list pages' markup and style are what they were, apart from the n
   let guests = still(GUESTS_HTML);
   guests = without(guests, GUESTS_NAME_RULES, 1, "/guests name rules");
   guests = without(guests, GUESTS_RULE_PARAGRAPH, 1, "/guests rule paragraph");
+  // A door is a link only when its stored name is a usable address; the page said every door opens.
+  assert.equal(guests.split(GUESTS_DOOR_SENTENCE).length - 1, 1, "/guests door sentence");
+  guests = guests.replace(GUESTS_DOOR_SENTENCE, "Every door opens onto that guest's card.");
   assert.equal(sha256(guests), BEFORE.static["/guests"]);
 
   assert.equal(sha256(without(still(LEDGER_HTML), LEDGER_NAME_RULES, 1, "/ledger name rules")), BEFORE.static["/ledger"]);

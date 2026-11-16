@@ -52,6 +52,7 @@ function completeness(res){
   if(res.reason==='page_failed'){why='page '+res.failedAt+' did not load';}
   else if(res.reason==='bad_body'){why='page '+res.failedAt+' was not the expected JSON';}
   else if(res.reason==='no_cursor'){why='the last page did not say the list was complete, and gave no cursor';}
+  else if(res.reason==='bad_cursor'){why='the last page gave a cursor that cannot be sent back';}
   else if(res.reason==='page_limit'){why='reading stopped after '+ROSTER_PAGE_LIMIT+' pages';}
   return 'may be incomplete: '+res.reason+' ('+why+')';
 }

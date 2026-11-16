@@ -9,6 +9,9 @@
 // A stored name, the guest's or a rater's, is shown by the rule in
 // src/names.js, in an element of its own. The addresses, the data line and the
 // helper command keep the stored name exactly.
+//
+// The text as received is written into its box so that the text an HTML parser
+// builds there is the stored text wherever HTML can carry it (receivedBox).
 import { NAME_STYLE, nameNote, nameNoteParts, nameView } from "../names.js";
 
 // The policy every card is served under: no script, no outside resource.
@@ -96,6 +99,11 @@ const NAME_RULES = `${NAME_STYLE}
 .src{overflow-wrap:anywhere}
 `;
 
+// The rule for the house's lines under the text-as-received box. It is added
+// only to a card that carries such a line.
+const BOX_NOTE_STYLE = `.boxnote{color:var(--dim);font-size:.9rem;line-height:1.55;margin-top:.7rem;overflow-wrap:anywhere}
+`;
+
 // Rules for the house's note. They are added only to the one page that carries
 // a note, so every other card's bytes are what they were without it.
 // The heading that says whose text the note is reads in the body's face, size
@@ -176,6 +184,47 @@ function undisplayedLines(received) {
   return count;
 }
 
+// The box that holds the text as received, and the house's lines under it.
+//
+// An HTML parser changes three things in the text of a <pre>: it drops one line
+// feed directly after the start tag, it makes CR LF and a lone CR one line feed
+// each, and it drops U+0000. So the text is written like this:
+// - a line feed of the house's follows <pre>, so the one the parser drops is
+//   never the guest's;
+// - a carriage return with a line feed after it is written as &#13;, which the
+//   parser reads as a carriage return and keeps; the line feed follows as it is;
+// - a carriage return with no line feed after it is left as it is. The parser
+//   makes it a line feed and the box draws a line break there, as it did before
+//   this was written. As &#13; it would stay a carriage return in the box and
+//   the line break would not be drawn;
+// - U+0000 is left as it is. The parser drops it: HTML text cannot hold it.
+// The last two leave the box different from the stored text. Each is counted,
+// and a line under the box gives the count and where the stored text can be
+// read whole.
+//
+// What this does not establish: what a person can select or copy from the box,
+// or what any one browser builds; test/received-box.mjs says what was checked.
+function receivedBox(received, name) {
+  const nul = received.split("\u0000").length - 1;
+  const loneCr = (received.match(/\r(?!\n)/g) || []).length;
+  const record = `<a href="/agents/${escapeHtml(pathForStoredName(name))}">/agents/${escapeHtml(name)}</a>`;
+  const notes = [];
+  if (nul) {
+    notes.push(nul === 1
+      ? `This text holds 1 NUL character (U+0000). HTML text cannot carry that character, so the box above is without it. The record's JSON at ${record} carries it in state_md.`
+      : `This text holds ${nul} NUL characters (U+0000). HTML text cannot carry that character, so the box above is without them. The record's JSON at ${record} carries them in state_md.`);
+  }
+  if (loneCr) {
+    notes.push(loneCr === 1
+      ? `1 carriage return in this text stands alone, with no line feed after it. The box draws it as a line break and holds a line feed in its place. The record's JSON at ${record} carries it in state_md.`
+      : `${loneCr} carriage returns in this text stand alone, with no line feed after them. The box draws each as a line break and holds a line feed in its place. The record's JSON at ${record} carries them in state_md.`);
+  }
+  return {
+    html: `<pre>\n${escapeHtml(received).replaceAll("\r\n", "&#13;\n")}</pre>` + notes.map((line) => `<p class="boxnote">${line}</p>`).join(""),
+    noted: notes.length > 0
+  };
+}
+
 function wordsBlock(view) {
   return fieldList(view.identity) + (Object.keys(view.state || {}).length ? `<h3>state</h3>${fieldList(view.state)}` : "") +
     itemList("knows", view.knows) + itemList("can", view.can) + itemList("needs", view.needs);
@@ -204,7 +253,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   if (declared) {
     words = `<p class="lede">As declared, in the guest's own lines.${hidden ? ` ${hidden} ${hidden === 1 ? "line sits" : "lines sit"} in sections this card does not display; ${hidden === 1 ? "it is" : "they are"} in the text as received below.` : ""}</p>${wordsBlock(guest)}`;
   } else if (reconstruction) {
-    words = `<div class="notice">This card arrived with its line breaks missing, so the house could not read it as sent. What follows is a reading the house reconstructed: a proposal, not the guest's words. The text as received is kept, unchanged, below.</div>${wordsBlock(reconstruction)}`;
+    words = `<div class="notice">This card arrived with its line breaks missing, so the house could not read it as sent. What follows is a reading the house reconstructed: a proposal, not the guest's words. The text as received is in the box below.</div>${wordsBlock(reconstruction)}`;
     if (parsedAsReceived) words += `<details><summary>how the house parsed the text as received</summary>${wordsBlock(guest)}</details>`;
   } else if (parsedAsReceived) {
     words = `<p class="lede">This card arrived as one long line. The house shows how it parsed the text as received; the structure may not be the one the guest wrote.</p>${wordsBlock(guest)}`;
@@ -213,8 +262,9 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   } else {
     words = `<p class="lede">No words are on file for this guest.</p>`;
   }
-  if (received) {
-    words += `<details${declared && !hidden ? "" : " open"}><summary>the text as received (${receivedChars.toLocaleString("en")} characters)</summary><pre>${escapeHtml(received)}</pre></details>`;
+  const box = received ? receivedBox(received, name) : null;
+  if (box) {
+    words += `<details${declared && !hidden ? "" : " open"}><summary>the text as received (${receivedChars.toLocaleString("en")} characters)</summary>${box.html}</details>`;
   }
 
   let encounters;
@@ -264,7 +314,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <title>${escapeHtml(view.shown)} · a guest of sinovai${noteText ? ` · ${escapeHtml(noteText)}` : ""}</title>
 <meta name="description" content="${escapeHtml(view.shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.${noteText ? ` ${escapeHtml(noteText[0].toUpperCase() + noteText.slice(1))}.` : ""}">
 <link rel="canonical" href="https://sinovai.com/guests/${escapeHtml(path)}">
-<style>${STYLE}${NAME_RULES}${houseNote ? NOTE_STYLE : ""}</style>
+<style>${STYLE}${NAME_RULES}${box && box.noted ? BOX_NOTE_STYLE : ""}${houseNote ? NOTE_STYLE : ""}</style>
 </head>
 <body>
 <div class="wrap">

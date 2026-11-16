@@ -229,15 +229,25 @@ section), the declared kind, the words state, and the declared freshness. It
 shows no score, count, or colour derived
 from one. The page says "the list reported complete" only when the last page
 held an `agents` array and `list_complete: true`; otherwise it says "may be
-incomplete" with a reason (`page_failed`, `bad_body`, `no_cursor`, or
-`page_limit` after 20 pages). A page that does not answer within 20 seconds is
-given up and reported as `page_failed`, in browsers that have
-`AbortController`. Cards appear when the whole read has ended, not page by
+incomplete" with a reason (`page_failed`, `bad_body`, `no_cursor`,
+`bad_cursor`, or `page_limit` after 20 pages). A page that does not answer
+within 20 seconds is given up and reported as `page_failed`, in browsers that
+have `AbortController`. `bad_body` means the browser's JSON reader reported a
+parse error, or the body held no `agents` array. A body whose read fails in
+any other way, such as a connection that breaks part-way, is `page_failed`; a
+body cut short with no transfer error can still be reported as `bad_body`.
+`bad_cursor` means the last page read gave a `next_cursor` that cannot be
+written into an address: that page's records are kept, and no page is
+reported as failed. Cards appear when the whole read has ended, not page by
 page. The gallery at `/guests` shares that reader,
 `src/pages/roster-reader.js`. A stored name that a browser would not keep as
-written in `/guests/<name>` (a space, a quote, `<`, `?`, `#`, a slash, a
-non-ASCII character, a dot segment) gets a card with no link and a line saying
-so; the gallery does not make this check. The page lists rating submissions
+written in `/guests/<name>` (a space, a quote, `<`, `?`, `#`, `|`, `^`, a
+slash, a non-ASCII character, a dot segment) gets a card with no link and a
+line saying so. The gallery makes the same check: such a door is hung with no
+link, and its label ends with that line in an element of its own. The check
+decides only whether a link is drawn. No route was changed, so a browser that
+rewrites such a name on the way (Chromium sends `|` as `%7C`) still does not
+reach that record's card. The page lists rating submissions
 without their four numbers and no longer lists pairs. The submissions are shown
 as soon as `GET /interactions` answers; names in them become links once the
 record list has been read. On a narrow screen the nav link to the house's card
@@ -336,6 +346,43 @@ scratch runs that are not committed tests. Hand-written placards on the
 museum pages are not covered. As with `/arena`, none of this describes a
 deployment.
 
+### The text as received, in its box
+
+A guest card shows the text as received in a box (a `pre` element). An HTML
+parser changes three things inside one: it drops one line feed directly after
+the start tag, it makes CR LF and a carriage return standing alone one line
+feed each, and it drops U+0000. So the box's text could differ from the
+stored text. In this source the card writes the text like this:
+
+- A line feed of the house's follows the start tag, so the one a parser drops
+  is not the guest's.
+- A carriage return with a line feed after it is written as `&#13;` and the
+  line feed. Both are then in the box.
+- A carriage return with no line feed after it is left to the parser, which
+  makes it a line feed, and the box draws a line break there as it did
+  before. Written as `&#13;` it would stay in the box's text, and no line
+  break was drawn for it in the one browser tried.
+- U+0000 is left to the parser, which drops it. HTML text cannot hold it.
+
+For the last two the box still differs from the stored text. The card then
+adds a line under the box for each, with its count, pointing to
+`/agents/<name as stored>`, whose JSON carries the text in `state_md`. The
+number of characters in the box's heading counts the stored text. The notice
+on a reconstructed card now reads "The text as received is in the box below";
+it said "kept, unchanged, below".
+
+Limits of the check: `test/received-box.test.mjs` reads the box through a
+model of those parser rules written for the tests (`test/received-box.mjs`),
+not through a browser. On 2026-11-16 the same 22 made-up texts were read in
+headless Chromium 151, in a scratch run that is not a committed test: the
+box's `textContent` was what the model gives for all 22, and was the stored
+text for the 9 that hold neither U+0000 nor a carriage return standing
+alone. What a person can select or copy is not claimed: in that run a
+selection of the whole box left out the last line break of each of the 18
+texts that end with one. No other browser was tried. The stored text and
+`GET /agents/<name>` are not changed, and none of this describes a
+deployment.
+
 ### The house's card
 
 `GET /house` is the house's own card. A guest's card has three parts: their
@@ -398,7 +445,8 @@ box. Whoever holds the record's claim token can change the first line, so this
 keeps a first line from closing a quotation and going on in the house's voice.
 Control characters, line and paragraph separators, and the characters that
 embed, override, or isolate text direction are shown in the box as codes such
-as `[U+202E]`; the text as received, lower on the page, is unchanged. A first
+as `[U+202E]`; the text as received, lower on the page, still holds the
+characters themselves. A first
 line that is empty or only white space is described and not shown. This does
 not stop a record from saying anything inside its own box or its own text.
 

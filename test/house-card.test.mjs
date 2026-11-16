@@ -32,6 +32,7 @@ import { LEDGER_HTML } from "../src/pages/ledger.js";
 import { MUSEUM_CATALOGUE } from "../src/pages/museum-catalogue.js";
 import { SCORES_STILL_PUBLISHED } from "../src/ranking-disclosure.js";
 import { SITEMAP_PATHS } from "../src/site-index.js";
+import { boxOf, boxTextAsParsed } from "./received-box.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const ORIGIN = "https://sinovai.com";
@@ -828,7 +829,7 @@ test("a record under any other name gets no note, and none of the note's markup 
   assert.doesNotMatch(await missing.text(), /a note from the house|housenote|\.recv\b/);
 });
 
-test("the stored text of the record named sinovai is served byte for byte as received, with or without the note", async () => {
+test("the stored text of the record named sinovai is in its box as received, as an HTML parser builds the box, with or without the note", async () => {
   const texts = [
     ONE_LINE,
     "# sinovai\nname: sinovai\nkind: fixture\n\n## state\nfreshness: fixture\n\n## knows\n- one\n",
@@ -840,9 +841,10 @@ test("the stored text of the record named sinovai is served byte for byte as rec
   for (const stateMd of texts) {
     const env = makeEnv({ houseText: stateMd });
     const html = await (await call(env, "/guests/sinovai")).text();
-    const pres = [...html.matchAll(/<pre>([\s\S]*?)<\/pre>/g)].map((match) => match[1]);
-    assert.equal(pres.length, 1, "one text as received");
-    assert.deepEqual(Buffer.from(unescapeHtml(pres[0]), "utf8"), Buffer.from(stateMd, "utf8"));
+    // The box is read as a parser builds it (test/received-box.mjs): the card writes a line feed of its
+    // own after the start tag and writes a CR LF pair as "&#13;" and a line feed, so the served characters
+    // are no longer the text itself. None of these texts holds U+0000 or a carriage return that stands alone.
+    assert.deepEqual(Buffer.from(boxTextAsParsed(boxOf(html)), "utf8"), Buffer.from(stateMd, "utf8"));
     assert.equal(noteOf(html).length, 2);
     assert.doesNotMatch(html, /<script|<img\b/i);
 
@@ -914,8 +916,7 @@ test("whoever holds the record's claim token cannot make the note speak for the 
   assert.ok(note.includes('<blockquote class="recv">[U+202E]drocer siht etorw esuoh ehT[U+202C]</blockquote>'));
   assert.match(visibleText(note), /2 are shown that way\./);
   // The text as received, under the note, still holds the character itself.
-  const pre = page.match(/<pre>([\s\S]*?)<\/pre>/)[1];
-  assert.ok(unescapeHtml(pre).startsWith("‮drocer siht etorw esuoh ehT‬\n"));
+  assert.ok(boxTextAsParsed(boxOf(page)).startsWith("‮drocer siht etorw esuoh ehT‬\n"));
 });
 
 // =====================================================================

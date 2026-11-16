@@ -207,6 +207,74 @@ test("a page that does not answer in time is given up as page_failed, and the re
   assert.equal(quick.timers.size, 0);
 });
 
+// A page whose status and headers arrived, and whose body read then fails with `error`.
+const bodyFails = (error) => () => Promise.resolve({ status: 200, ok: true, json: () => Promise.reject(error) });
+
+test("a body that did not arrive whole is page_failed; bad_body is a parse error or a body with no agents array", async (t) => {
+  // Review finding c2a-2: a connection that broke while the body was arriving was reported as "not the expected JSON".
+  const fromAnotherRealm = vm.runInNewContext("new SyntaxError('Unexpected end of JSON input')");
+  assert.equal(fromAnotherRealm instanceof SyntaxError, false, "the fixture is an error this realm's instanceof does not know");
+  const cases = [
+    ["the transfer fails while the body arrives", new TypeError("network error"), "page_failed"],
+    ["the read is given up by something other than the reader's own limit", Object.assign(new Error("The operation was aborted"), { name: "AbortError" }), "page_failed"],
+    ["the rejection carries no error", undefined, "page_failed"],
+    ["the rejection is a text that names a parse error", "SyntaxError", "page_failed"],
+    ["the body is not JSON", new SyntaxError("Unexpected token < in JSON"), "bad_body"],
+    ["the body is not JSON, and the error was made in another realm", fromAnotherRealm, "bad_body"]
+  ];
+  for (const [label, error, reason] of cases) {
+    await t.test(label, async () => {
+      const { result } = await readWith(routesFor([PAGES[0], bodyFails(error)]));
+      assert.deepEqual({ ...result, list: result.list.length }, { list: 2, complete: false, reason, pages: 1, failedAt: 2 });
+    });
+  }
+  await t.test("after the reader's limit has run out, a parse error is still page_failed", async () => {
+    const clock = fakeClock();
+    let failBody;
+    const { result } = await readWith((url) => {
+      if (url === "/agents") return reply(200, PAGES[0]);
+      return Promise.resolve({ status: 200, ok: true, json: () => new Promise((_resolve, reject) => { failBody = reject; }) });
+    }, {
+      clock,
+      during: async () => {
+        await settle();
+        clock.fireAll();
+        failBody(new SyntaxError("Unexpected end of JSON input"));
+      }
+    });
+    assert.deepEqual({ ...result, list: result.list.length }, { list: 2, complete: false, reason: "page_failed", pages: 1, failedAt: 2 });
+  });
+});
+
+// A cursor encodeURIComponent refuses: half of a surrogate pair. The cursors the live list gave when read on
+// 2026-11-13 and 2026-11-16 were base64url text, which it does not refuse; no cursor of this kind was seen.
+const UNSENDABLE_CURSOR = "x\uD800";
+
+test("a cursor that cannot be written into an address stops the read as bad_cursor, and no page is called failed", async (t) => {
+  // Review finding c2a-3: the page that gave such a cursor was reported as failed, with its records shown and pages one too low.
+  assert.throws(() => encodeURIComponent(UNSENDABLE_CURSOR), URIError);
+  await t.test("from the first page", async () => {
+    const clock = fakeClock();
+    const { result, calls } = await readWith((url) => {
+      assert.equal(url, "/agents");
+      return reply(200, { ...PAGES[0], next_cursor: UNSENDABLE_CURSOR });
+    }, { clock });
+    assert.deepEqual(calls, ["/agents"], "no address was made from the cursor");
+    assert.deepEqual(result, { list: PAGES[0].agents, complete: false, reason: "bad_cursor", pages: 1 });
+    assert.equal(Object.hasOwn(result, "failedAt"), false);
+    assert.equal(clock.timers.size, 0, "no limit is left running");
+  });
+  await t.test("from a later page", async () => {
+    const { result, calls } = await readWith((url) => {
+      if (url === "/agents") return reply(200, PAGES[0]);
+      assert.equal(url, "/agents?cursor=page%202%2F%26");
+      return reply(200, { ...PAGES[1], next_cursor: UNSENDABLE_CURSOR });
+    });
+    assert.deepEqual(calls, ["/agents", "/agents?cursor=page%202%2F%26"]);
+    assert.deepEqual(result, { list: [...PAGES[0].agents, ...PAGES[1].agents], complete: false, reason: "bad_cursor", pages: 2 });
+  });
+});
+
 test("the reader decodes no name; it carries the link rule the arena and the gallery share", async () => {
   // How a stored name is shown is the name fragment's work (src/pages/name-view.js, test/names.test.mjs).
   const { globals } = await readWith(routesFor([{ agents: [], list_complete: true }]));
@@ -251,12 +319,15 @@ test("each card links to /guests/<name as stored> and carries kind, words and fr
   }
 });
 
+// [stored name, whether '/guests/'+name is an address a browser keeps as written]
+const LINK_CASES = [
+  ["plain-name_1.x~", true], ["%E8%B3%93", true], ["%3Cscript%3E", true], ["..%2F..%2Fadmin", true], ["a'b(c)*!$&+,;=:@", true], ["%zz", true],
+  ["a b", false], ["a?b", false], ["a#b", false], ["a\"b", false], ["<svg>", false], ["a/b", false], ["a\\b", false], ["a\u0000b", false], ["a\tb", false],
+  ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], ["a|b", false], ["a^b", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
+];
+
 test("a card is a link only when /guests/<stored name> is an address that reaches that name", async () => {
-  const names = [
-    ["plain-name_1.x~", true], ["%E8%B3%93", true], ["%3Cscript%3E", true], ["..%2F..%2Fadmin", true], ["a'b(c)*!$&+,;=:@", true], ["%zz", true],
-    ["a b", false], ["a?b", false], ["a#b", false], ["a\"b", false], ["<svg>", false], ["a/b", false], ["a\\b", false], ["a\u0000b", false], ["a\tb", false],
-    ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], ["a|b", false], ["a^b", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
-  ];
+  const names = LINK_CASES;
   const a = arena(routesFor([{ agents: names.map(([name]) => ({ name, kind: "agent" })), list_complete: true }], { interactions: { interactions: [{ rater: "a b", rated: "plain-name_1.x~", notes: "" }] } }));
   await settle();
   const cards = a.cards();
@@ -342,7 +413,9 @@ test("a failed or partial listing renders as partial, with its reason, never as 
     ["page_failed on a later page", [one, () => reply(502, {})], 2, "may be incomplete: page_failed (page 2 did not load)"],
     ["bad_body", [one, () => reply(200, NOT_JSON)], 2, "may be incomplete: bad_body (page 2 was not the expected JSON)"],
     ["bad_body that claims to be complete", [one, { list_complete: true }], 2, "may be incomplete: bad_body (page 2 was not the expected JSON)"],
-    ["no_cursor", [{ ...one, next_cursor: null }], 2, "may be incomplete: no_cursor (the last page did not say the list was complete, and gave no cursor)"]
+    ["a body that did not arrive whole is not called unexpected JSON", [one, bodyFails(new TypeError("network error"))], 2, "may be incomplete: page_failed (page 2 did not load)"],
+    ["no_cursor", [{ ...one, next_cursor: null }], 2, "may be incomplete: no_cursor (the last page did not say the list was complete, and gave no cursor)"],
+    ["bad_cursor", [{ ...one, next_cursor: UNSENDABLE_CURSOR }], 2, "may be incomplete: bad_cursor (the last page gave a cursor that cannot be sent back)"]
   ];
   for (const [label, pages, count, status] of cases) {
     await t.test(label, async () => {
@@ -575,7 +648,8 @@ test("the gallery shares the reader, keeps the order received, and prints no rat
   const g = gallery(galleryRoutes(NAMED_PAGES));
   await settle();
   assert.deepEqual(g.doors().map((cell) => cell.children[1].children[0].textContent), ["zeta", "賓", "Alpha", HOSTILE_NAME, "mid"]);
-  assert.deepEqual(g.doors().map((cell) => cell.children[0].href), ["/guests/zeta", "/guests/%E8%B3%93", "/guests/Alpha", "/guests/" + HOSTILE_NAME, "/guests/mid"]);
+  // The name that is markup is not an address a browser keeps as written, so its door has no link.
+  assert.deepEqual(g.doors().map((cell) => cell.children[0].href), ["/guests/zeta", "/guests/%E8%B3%93", "/guests/Alpha", undefined, "/guests/mid"]);
   for (const cell of g.doors()) {
     assert.doesNotMatch(cell.textContent, /rating|cache/, "a door carries no rating count");
     for (const value of SCORE_STRINGS) assert.equal(cell.textContent.includes(value), false, "score or count value on a door: " + value);
@@ -584,11 +658,102 @@ test("the gallery shares the reader, keeps the order received, and prints no rat
   assert.deepEqual(g.forbidden, []);
 });
 
+// Every element under a node, in document order.
+function elementsUnder(node, found = []) {
+  for (const child of node.children) { found.push(child); elementsUnder(child, found); }
+  return found;
+}
+
+test("a gallery door is a link only when /guests/<stored name> is an address that reaches that name", async () => {
+  // Review finding GW-4: the gallery linked every door, so a door for a name such as a|b led to a page for another path.
+  const g = gallery(galleryRoutes([{ agents: LINK_CASES.map(([name]) => ({ name, kind: "agent", words: "declared", freshness: "live" })), list_complete: true }]));
+  await settle();
+  const doors = g.doors();
+  assert.equal(doors.length, LINK_CASES.length);
+  for (const [index, [name, linked]] of LINK_CASES.entries()) {
+    const cell = doors[index];
+    const label = JSON.stringify(name);
+    const [first, caption] = cell.children;
+    const links = elementsUnder(cell).filter((node) => node.tagName === "A" || node.href !== undefined);
+    assert.equal(caption.tagName, "FIGCAPTION", label);
+    if (linked) {
+      assert.equal(links.length, 1, label);
+      assert.equal(first.tagName, "A", label);
+      assert.equal(first.className, "door-link", label);
+      assert.equal(first.href, "/guests/" + name, label);
+      assert.equal(new URL(first.href, "https://sinovai.com").pathname, "/guests/" + name, label);
+      assert.match(first.attributes["aria-label"], / — open this guest’s card$/, label);
+      assert.equal(cell.textContent.includes(UNLINKED), false, label);
+      assert.equal(first.children[0].className, "door-frame hung lit", label);
+    } else {
+      assert.equal(links.length, 0, label + ": no link anywhere in the cell");
+      // The door is drawn as the others are: the same frame, with nothing that says it opens.
+      assert.equal(first.tagName, "DIV", label);
+      assert.equal(first.className, "door-frame hung lit", label);
+      assert.equal(elementsUnder(cell).some((node) => Object.hasOwn(node.attributes, "aria-label")), false, label);
+      // The house's line is the last thing in the label, in an element of its own.
+      const last = caption.childNodes.at(-1);
+      assert.equal(last.nodeType, 1, label);
+      assert.equal(last.textContent, UNLINKED, label);
+      assert.equal(caption.textContent.endsWith(UNLINKED), true, label);
+      assert.equal(cell.textContent.split(UNLINKED).length - 1, 1, label);
+    }
+    // Linked or not, the door carries a face, and the label carries what the record declares.
+    const door = (linked ? first.children[0] : first).children[0];
+    assert.equal(door.children.filter((node) => node.className === "door-name").length, 1, label);
+    assert.ok(caption.textContent.includes(" · declares: live"), label);
+  }
+  assert.deepEqual(g.forbidden, []);
+});
+
+test("a freshness text that copies the house's line stays inside the sender's run of text; the house's line is an element", async () => {
+  const g = gallery(galleryRoutes([{
+    agents: [
+      { name: "plain", kind: "agent", words: "declared", freshness: UNLINKED },
+      { name: "a|b", kind: "agent", words: "declared", freshness: UNLINKED }
+    ],
+    list_complete: true
+  }]));
+  await settle();
+  const [plain, piped] = g.doors().map((cell) => cell.children[1].childNodes);
+  // A linked door: the copied words are text after the house's word "declares", and no element follows.
+  assert.equal(plain.at(-1).nodeType, 3);
+  assert.equal(plain.at(-1).textContent, " · declares: " + UNLINKED);
+  // An unlinked door: the same text, then the house's line in its own element.
+  assert.equal(piped.at(-2).textContent, " · declares: " + UNLINKED);
+  assert.deepEqual([piped.at(-1).nodeType, piped.at(-1).tagName, piped.at(-1).textContent], [1, "DIV", UNLINKED]);
+});
+
+test("a gallery record with no name gets a door with no link and no line about its address", async () => {
+  const g = gallery(galleryRoutes([{ agents: [{ kind: "agent", words: "declared", freshness: "live" }, { name: "", kind: "agent" }], list_complete: true }]));
+  await settle();
+  const doors = g.doors();
+  assert.equal(doors.length, 2);
+  for (const cell of doors) {
+    assert.equal(elementsUnder(cell).filter((node) => node.tagName === "A" || node.href !== undefined).length, 0);
+    assert.equal(cell.children[0].tagName, "DIV");
+    assert.equal(cell.children[1].children[0].textContent, "(unnamed record)");
+    assert.equal(cell.textContent.includes(UNLINKED), false, "the line is about a stored name, and this record has none");
+  }
+});
+
+test("the gallery says a door opens when its stored name is a usable address, not that every door opens", () => {
+  const text = GUESTS_HTML.replace(/\s+/g, " ");
+  assert.equal(text.split("A door opens onto that guest's card when its stored name is a usable address.").length - 1, 1);
+  assert.doesNotMatch(text, /Every door opens/);
+  // The words the page uses for a door with no link are the reader's, shared with /arena.
+  assert.equal(ROSTER_READER.split("var UNLINKED='" + UNLINKED + "';").length - 1, 1);
+  assert.match(UNLINKED, /not a usable address$/);
+});
+
 test("the gallery says when its read may be incomplete, and why", async (t) => {
   const cases = [
     ["no_cursor", [{ ...NAMED_PAGES[0], next_cursor: null }], "first 1 page only · may be incomplete: no_cursor"],
     ["page_failed", [NAMED_PAGES[0], () => Promise.reject(new Error("offline"))], "first 1 page only; page 2 could not be read · may be incomplete: page_failed"],
-    ["bad_body", [NAMED_PAGES[0], NAMED_PAGES[1], { list_complete: true }], "first 2 pages only; page 3 could not be read · may be incomplete: bad_body"]
+    ["bad_body", [NAMED_PAGES[0], NAMED_PAGES[1], { list_complete: true }], "first 2 pages only; page 3 could not be read · may be incomplete: bad_body"],
+    ["a body that did not arrive whole", [NAMED_PAGES[0], bodyFails(new TypeError("network error"))], "first 1 page only; page 2 could not be read · may be incomplete: page_failed"],
+    // The page that gave the cursor was read; no page is said to be unreadable.
+    ["bad_cursor", [{ ...NAMED_PAGES[0], next_cursor: UNSENDABLE_CURSOR }], "first 1 page only · may be incomplete: bad_cursor"]
   ];
   for (const [label, pages, phrase] of cases) {
     await t.test(label, async () => {
