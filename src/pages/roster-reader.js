@@ -1,6 +1,7 @@
 // A literal browser program: bundlers must not inject module closures into it.
-// It is a fragment, not a module: it defines decRuns and readRoster in the
-// scope of the page script that includes it. /guests and /arena both do.
+// It is a fragment, not a module: it defines readRoster, linkable and UNLINKED
+// in the scope of the page script that includes it. /guests and /arena both do.
+// How a stored name is shown is a fragment of its own, src/pages/name-view.js.
 //
 // Lifted from the gallery script (src/pages/guests.js) with one fix. The old
 // reader called a read complete whenever it had no cursor left to follow, so a
@@ -16,7 +17,14 @@
 // What it does not establish: that the store returned every key, that a page
 // was not changed between two reads, or anything about the records themselves.
 export const ROSTER_READER = String.raw`
-function decRuns(s){return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(e){return m;}});}
+/* Whether '/guests/'+name is an address a browser keeps as written, so that it
+   reaches that name. A name with a space, a quote, <, >, ?, #, |, ^, a slash, a
+   backslash, a control or a non-ASCII character, or one that is a dot segment,
+   would be changed on the way and reach another path. Such a name gets no link. */
+var NOT_A_SEGMENT=/[\u0000-\u0020"#<>?\x60{}|^\\\/\u007F-\uFFFF]/;
+var DOT_SEGMENT=/^(?:\.|%2[eE]){1,2}$/;
+function linkable(stored){return !!stored&&!NOT_A_SEGMENT.test(stored)&&!DOT_SEGMENT.test(stored);}
+var UNLINKED='not linked: this stored name is not a usable address';
 
 /* Reads GET /agents page by page and keeps the records in the order received.
    Always resolves: {list, complete, reason, pages, failedAt}.

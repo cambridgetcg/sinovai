@@ -7,12 +7,17 @@
 // Nothing here sorts, scores or colours a record. Fetched values reach the page
 // only through createElement, textContent and href; loadRooms included.
 //
+// A stored name is shown by the rule in src/names.js, through the fragment in
+// src/pages/name-view.js: the name in an element of its own, then the stored
+// form in brackets when the rule read any of it. A link's text is the name alone.
+//
 // What it does not establish: who wrote a record, whether a declared kind or
 // freshness is true, or that the list is the whole store. The reader reports
 // when a read may be incomplete (src/pages/roster-reader.js).
+import { NAME_VIEW } from "./name-view.js";
 import { ROSTER_READER } from "./roster-reader.js";
 
-export const ARENA_CLIENT = ROSTER_READER + String.raw`
+export const ARENA_CLIENT = ROSTER_READER + NAME_VIEW + String.raw`
 var $=function(id){return document.getElementById(id);};
 function el(tag,cls,text){
   var n=document.createElement(tag);
@@ -52,19 +57,13 @@ function completeness(res){
 }
 function countOf(n){return n+(n===1?' record':' records');}
 
-/* Whether '/guests/'+name is an address a browser keeps as written, so that it
-   reaches that name. A name with a space, a quote, <, >, ?, #, |, ^, a slash, a
-   backslash, a control or a non-ASCII character, or one that is a dot segment,
-   would be changed on the way and reach another path. Such a name gets no link. */
-var NOT_A_SEGMENT=/[\u0000-\u0020"#<>?\x60{}|^\\\/\u007F-\uFFFF]/;
-var DOT_SEGMENT=/^(?:\.|%2[eE]){1,2}$/;
-function linkable(stored){return !!stored&&!NOT_A_SEGMENT.test(stored)&&!DOT_SEGMENT.test(stored);}
-var UNLINKED='not linked: this stored name is not a usable address';
-
+/* linkable and UNLINKED come with the reader (src/pages/roster-reader.js);
+   nameView, shownNode and storedNode with the name fragment (src/pages/name-view.js). */
 function cardFor(entry){
   var rec=(entry&&typeof entry==='object')?entry:{};
   var stored=(typeof rec.name==='string'&&rec.name)?rec.name:'';
-  var shown=stored?decRuns(stored):'(record with no name field)';
+  var view=stored?nameView(stored):null;
+  var shown=view?view.shown:'(record with no name field)';
   var card;
   if(linkable(stored)){
     card=el('a','mind');
@@ -72,7 +71,16 @@ function cardFor(entry){
   }else{
     card=el('div','mind');
   }
-  card.appendChild(el('div','nm',shown));
+  /* the name line: the name in its own element, then the stored form if the rule read any of it */
+  var nm=el('div','nm');
+  if(view){
+    nm.appendChild(shownNode(view));
+    var st=storedNode(view);
+    if(st){nm.appendChild(st);}
+  }else{
+    nm.textContent=shown;
+  }
+  card.appendChild(nm);
   /* kind as declared; else the house's reconstructed kind, marked; the API fallback "unknown" is left out */
   var kind='';
   if(typeof rec.kind==='string'&&rec.kind&&rec.kind!=='unknown'){kind=rec.kind;}
@@ -122,15 +130,24 @@ var q=$('q');
 if(q){q.addEventListener('input',applyFilter);}
 
 /* ── rating submissions: rater, rated, note, date; the four numbers are not shown here ── */
-function nameNode(value,roster){
+/* Adds one name to a row: the name in its own element, inside a link when the
+   name is in the roster just read and is a usable address; then the stored form,
+   outside the link, if the rule read any of it. */
+function addName(host,value,roster){
   var stored=(typeof value==='string'&&value)?value:'';
-  if(!stored){return el('span',null,'(no name)');}
+  if(!stored){host.appendChild(el('span',null,'(no name)'));return;}
+  var view=nameView(stored);
+  var holder;
   if(roster[stored]===true&&linkable(stored)){
-    var a=el('a',null,decRuns(stored));
-    a.href='/guests/'+stored;
-    return a;
+    holder=el('a');
+    holder.href='/guests/'+stored;
+  }else{
+    holder=el('span');
   }
-  return el('span',null,decRuns(stored));
+  holder.appendChild(shownNode(view));
+  host.appendChild(holder);
+  var st=storedNode(view);
+  if(st){host.appendChild(st);}
 }
 function renderMeets(data,roster){
   var host=$('meets');
@@ -142,9 +159,9 @@ function renderMeets(data,roster){
     var x=(rows[i]&&typeof rows[i]==='object')?rows[i]:{};
     var row=el('div','seam');
     var who=el('div','who');
-    who.appendChild(nameNode(x.rater,roster));
+    addName(who,x.rater,roster);
     who.appendChild(el('span','arrow','→'));
-    who.appendChild(nameNode(x.rated,roster));
+    addName(who,x.rated,roster);
     row.appendChild(who);
     /* a rater's note is the rater's text; "no note" is the house's, and is styled apart */
     if(typeof x.notes==='string'&&x.notes){row.appendChild(el('div','note',x.notes));}

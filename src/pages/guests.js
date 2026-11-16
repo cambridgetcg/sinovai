@@ -1,3 +1,5 @@
+import { NAME_RULE_TEXT, NAME_STYLE } from "../names.js";
+import { NAME_VIEW } from "./name-view.js";
 import { ROSTER_READER } from "./roster-reader.js";
 
 export const GUESTS_HTML = String.raw`<!DOCTYPE html>
@@ -150,6 +152,8 @@ footer{border-top:1px solid var(--hair);padding:4.5rem 0 5rem;text-align:center}
   .rise{opacity:1;transform:none}
   html{scroll-behavior:auto}
 }
+/* ---- names: one element each (src/names.js) ---- */
+${NAME_STYLE}
 </style>
 </head>
 <body class="room">
@@ -184,6 +188,7 @@ footer{border-top:1px solid var(--hair);padding:4.5rem 0 5rem;text-align:center}
       <span class="g-kind" aria-hidden="true">◐</span> words reconstructed from a card that lost its line breaks ·
       <span class="g-none" aria-hidden="true">○</span> no readable words, or one long line with no reading proposed ·
       a seam of light = freshness declares live</p>
+    <p class="glyphs rise">${NAME_RULE_TEXT} On this wall the brackets are in the label under each door.</p>
     <p class="disclaim rise">the API's own words on its fields — kind: "self-declared" ·
     freshness: "self-declared text, not a measured heartbeat"</p>
 
@@ -346,8 +351,10 @@ function el(tag,cls,text){
   if(text){n.textContent=text;}
   return n;
 }
-/* decRuns and readRoster: the reader this page shares with /arena (src/pages/roster-reader.js) */
+/* readRoster, linkable and UNLINKED: the reader this page shares with /arena (src/pages/roster-reader.js) */
 ${ROSTER_READER}
+/* nameView, shownNode and storedNode: how a stored name is shown (src/pages/name-view.js) */
+${NAME_VIEW}
 
 /* ---- rise observer, wired now for static placards, again after render ---- */
 var io=null;
@@ -379,7 +386,8 @@ try{
 /* ---- one door per agent ---- */
 function frameFor(a){
   var stored=(typeof a.name==='string')?a.name:'';
-  var name=stored?decRuns(stored):'(unnamed record)';
+  var view=stored?nameView(stored):null;
+  var name=view?view.shown:'(unnamed record)';
   var words=(a.words==='declared'||a.words==='reconstructed'||a.words==='flattened')?a.words:'none';
   var kind=(typeof a.kind==='string'&&a.kind!=='unknown')?a.kind:
     ((typeof a.reconstructed_kind==='string')?a.reconstructed_kind:'');
@@ -399,15 +407,24 @@ function frameFor(a){
   glyph.setAttribute('aria-hidden','true');
   door.appendChild(glyph);
 
-  door.appendChild(el('h3','door-name',name));
+  /* the face of the door carries the name alone, in its own element */
+  var face=el('h3','door-name');
+  if(view){face.appendChild(shownNode(view));}else{face.textContent=name;}
+  door.appendChild(face);
   if(kind){door.appendChild(el('p','door-kind',kind+(words==='reconstructed'&&a.kind==='unknown'?' (reconstructed)':'')));}
   frame.appendChild(door);
   link.appendChild(frame);
   cell.appendChild(link);
 
+  /* the label under the door: the name, the stored form if the rule read any of
+     it, then the record's own freshness text after the house's word "declares" */
   var cap=el('figcaption','wall-label');
-  cap.appendChild(el('b',null,name));
-  if(fresh!=='unknown'){cap.appendChild(document.createTextNode(' · '+fresh));}
+  var label=el('b');
+  if(view){label.appendChild(shownNode(view));}else{label.textContent=name;}
+  cap.appendChild(label);
+  var st=view?storedNode(view):null;
+  if(st){cap.appendChild(st);}
+  if(fresh!=='unknown'){cap.appendChild(document.createTextNode(' · declares: '+fresh));}
   cell.appendChild(cap);
   return cell;
 }

@@ -1,6 +1,6 @@
 // The /arena guest list: the records GET /agents returned, in the order
 // received, with no score. These tests run the page's literal browser program
-// in a small stand-in DOM whose innerHTML setter throws.
+// in a small stand-in DOM whose innerHTML setter throws (test/page-stand-in.mjs).
 //
 // What they do not establish: how a real browser lays the page out, what a
 // deployed Worker serves, or whether any record is true or was written by the
@@ -8,7 +8,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { setImmediate } from "node:timers/promises";
 import test from "node:test";
 import vm from "node:vm";
 
@@ -18,175 +17,11 @@ import { GUESTS_HTML } from "../src/pages/guests.js";
 import { ROOM_CREATION_CLIENT } from "../src/pages/room-creation.js";
 import { ROSTER_READER } from "../src/pages/roster-reader.js";
 import { SCORES_STILL_PUBLISHED } from "../src/ranking-disclosure.js";
+import { NOT_JSON, fakeClock, guardGlobals, hangs, pageScript, reply, runArena, runGallery, settle } from "./page-stand-in.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const NOT_JSON = Symbol("a body that is not JSON");
 
-function reply(status, body) {
-  return Promise.resolve({
-    status,
-    ok: status >= 200 && status < 300,
-    async json() {
-      if (body === NOT_JSON) throw new SyntaxError("Unexpected token < in JSON");
-      return JSON.parse(JSON.stringify(body));
-    }
-  });
-}
-
-// ---- a stand-in DOM: text nodes and elements, nothing that parses markup ----
-function makeDom(ids, { strict }) {
-  const forbidden = [];
-  const classNames = new Set();
-  function forbid(name) {
-    forbidden.push(name);
-    throw new Error("Forbidden client effect: " + name);
-  }
-  function textNode(text) {
-    return { nodeType: 3, textContent: String(text) };
-  }
-  function element(tag) {
-    let nodes = [];
-    let className = "";
-    let href;
-    const attributes = {};
-    const listeners = new Map();
-    const node = {
-      nodeType: 1,
-      tagName: String(tag).toUpperCase(),
-      hidden: false,
-      value: "",
-      get childNodes() { return nodes; },
-      get children() { return nodes.filter((child) => child.nodeType === 1); },
-      get className() { return className; },
-      set className(value) { className = String(value); for (const name of className.split(/\s+/).filter(Boolean)) classNames.add(name); },
-      get textContent() { return nodes.map((child) => child.textContent).join(""); },
-      set textContent(value) { nodes = String(value) === "" ? [] : [textNode(value)]; },
-      get href() { return href; },
-      set href(value) { href = String(value); },
-      get attributes() { return attributes; },
-      appendChild(child) { nodes.push(child); child.parentNode = node; return child; },
-      removeChild(child) { nodes = nodes.filter((other) => other !== child); return child; },
-      addEventListener(type, listener) {
-        if (!listeners.has(type)) listeners.set(type, []);
-        listeners.get(type).push(listener);
-      },
-      fire(type) { for (const listener of listeners.get(type) || []) listener({ preventDefault() {} }); },
-      get innerHTML() { return forbid("innerHTML"); },
-      set innerHTML(_value) { forbid("innerHTML"); },
-      get outerHTML() { return forbid("outerHTML"); },
-      set outerHTML(_value) { forbid("outerHTML"); },
-      insertAdjacentHTML() { forbid("insertAdjacentHTML"); },
-      get style() { return forbid("style"); },
-      setAttribute(name, value) {
-        if (strict) forbid("setAttribute");
-        attributes[name] = String(value);
-      },
-      get classList() {
-        if (strict) return forbid("classList");
-        return { add(name) { className = (className + " " + name).trim(); } };
-      }
-    };
-    return node;
-  }
-  const byId = Object.fromEntries(ids.map((id) => [id, element("div")]));
-  const document = {
-    createElement(tag) { return element(tag); },
-    createTextNode(text) { return textNode(text); },
-    getElementById(id) {
-      assert.ok(Object.hasOwn(byId, id), "the page has an element with this id: " + id);
-      return byId[id];
-    },
-    querySelectorAll() { return []; },
-    write() { forbid("document.write"); }
-  };
-  return { document, byId, forbidden, classNames, forbid };
-}
-
-function guardGlobals(globals, forbid) {
-  for (const name of ["localStorage", "sessionStorage", "console", "navigator", "location", "setTimeout", "setInterval", "WebSocket", "XMLHttpRequest", "eval"]) {
-    if (Object.hasOwn(globals, name)) continue; // a test that supplies its own stand-in
-    Object.defineProperty(globals, name, { get() { return forbid(name); } });
-  }
-  return globals;
-}
-
-// Stand-ins for the page-read time limit: timers that run only when the test
-// fires them, and an AbortController whose signal a pending fetch can watch.
-function fakeClock() {
-  const timers = new Map();
-  let next = 1;
-  class AbortController {
-    constructor() {
-      const listeners = [];
-      this.signal = { aborted: false, addEventListener(_type, listener) { listeners.push(listener); } };
-      this.abort = () => { if (this.signal.aborted) return; this.signal.aborted = true; for (const listener of listeners) listener(); };
-    }
-  }
-  return {
-    timers,
-    globals: {
-      AbortController,
-      setTimeout(callback, ms) { const id = next++; timers.set(id, { callback, ms }); return id; },
-      clearTimeout(id) { timers.delete(id); }
-    },
-    fireAll() { for (const [id, timer] of [...timers]) { timers.delete(id); timer.callback(); } }
-  };
-}
-// A page that never answers, unless the read is aborted.
-function hangs(options) {
-  return new Promise((_resolve, reject) => {
-    options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-  });
-}
-
-async function settle() {
-  for (let round = 0; round < 5; round++) await setImmediate();
-}
-
-// Every text, class, link and hidden flag under a node, in document order.
-function shape(node) {
-  if (node.nodeType === 3) return node.textContent;
-  const out = { tag: node.tagName };
-  if (node.className) out.cls = node.className;
-  if (node.href !== undefined) out.href = node.href;
-  if (node.hidden) out.hidden = true;
-  out.nodes = node.childNodes.map(shape);
-  return out;
-}
-
-function everyString(node, found = []) {
-  if (node.nodeType === 3) { found.push(node.textContent); return found; }
-  found.push(node.className);
-  if (node.href !== undefined) found.push(node.href);
-  for (const child of node.childNodes) everyString(child, found);
-  return found;
-}
-
-function arena(routes, { wrap = (program) => program, clock = null } = {}) {
-  const dom = makeDom(["agents", "agN", "livecount", "q", "meets", "rooms"], { strict: true });
-  const calls = [];
-  const globals = guardGlobals({
-    ...(clock ? clock.globals : {}),
-    document: dom.document,
-    fetch(url, options) {
-      calls.push(String(url));
-      assert.ok(!options?.method || options.method === "GET", "the arena program only reads");
-      assert.equal(options?.body, undefined, "the arena program sends no body");
-      return routes(String(url), options);
-    }
-  }, dom.forbid);
-  vm.runInNewContext(wrap(ARENA_CLIENT), globals, { timeout: 1000, filename: "arena-client.js" });
-  const page = dom.byId;
-  return {
-    page, calls, forbidden: dom.forbidden, classNames: dom.classNames, globals,
-    cards() { return page.agents.children.filter((node) => /\bmind\b/.test(node.className)); },
-    names() { return this.cards().map((card) => card.children[0].textContent); },
-    visibleNames() { return this.cards().filter((card) => !card.hidden).map((card) => card.children[0].textContent); },
-    search(value) { page.q.value = value; page.q.fire("input"); },
-    strings() { return Object.values(page).flatMap((node) => everyString(node)); },
-    shapes() { return Object.fromEntries(Object.entries(page).map(([id, node]) => [id, shape(node)])); }
-  };
-}
+const arena = (routes, options) => runArena(ARENA_CLIENT, routes, options);
 
 // ---- one synthetic roster, three pages; later records carry larger scores ----
 const HOSTILE_NAME = "<img src=x onerror=alert(1)>";
@@ -266,7 +101,7 @@ async function readWith(routes, { clock = null, during = null } = {}) {
   const reading = globals.readRoster(null, [], 1);
   if (during) await during();
   const result = await reading;
-  return { result: JSON.parse(JSON.stringify(result)), calls, decRuns: globals.decRuns };
+  return { result: JSON.parse(JSON.stringify(result)), calls, globals };
 }
 
 test("the reader walks every page in the order received and follows the cursor it was given", async () => {
@@ -372,12 +207,16 @@ test("a page that does not answer in time is given up as page_failed, and the re
   assert.equal(quick.timers.size, 0);
 });
 
-test("the reader decodes percent runs for display and leaves a broken run as it is", async () => {
-  const { decRuns } = await readWith(routesFor([{ agents: [], list_complete: true }]));
-  assert.equal(decRuns("%E8%B3%93"), "賓");
-  assert.equal(decRuns("a%20b"), "a b");
-  assert.equal(decRuns("%E8%B3"), "%E8%B3");
-  assert.equal(decRuns("plain"), "plain");
+test("the reader decodes no name; it carries the link rule the arena and the gallery share", async () => {
+  // How a stored name is shown is the name fragment's work (src/pages/name-view.js, test/names.test.mjs).
+  const { globals } = await readWith(routesFor([{ agents: [], list_complete: true }]));
+  assert.equal(typeof globals.decRuns, "undefined");
+  assert.doesNotMatch(ROSTER_READER, /decodeURIComponent/);
+  assert.equal(globals.UNLINKED, UNLINKED);
+  assert.equal(globals.linkable("%E8%B3%93"), true);
+  assert.equal(globals.linkable("plain"), true);
+  assert.equal(globals.linkable("a b"), false);
+  assert.equal(globals.linkable(""), false);
 });
 
 // ---- the arena guest list ----
@@ -399,7 +238,8 @@ test("each card links to /guests/<name as stored> and carries kind, words and fr
   const cards = a.cards().map((card) => ({ tag: card.tagName, href: card.href, cls: card.className, lines: card.children.map((line) => [line.className, line.textContent]) }));
   assert.deepEqual(cards, [
     { tag: "A", href: "/guests/zeta", cls: "mind", lines: [["nm", "zeta"], ["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
-    { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓"], ["kd", "project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
+    // An upper-case escape of a letter outside ASCII is read; the stored form follows the name on the same line.
+    { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓 (stored as %E8%B3%93)"], ["kd", "project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
     { tag: "A", href: "/guests/Alpha", cls: "mind", lines: [["nm", "Alpha"], ["kd", "library"], ["met", "one long line with no reading proposed"], ["met", "declares: rebuilt whenever the book grows"]] },
     // A stored name that is not a serialized path segment gets a card with no link.
     { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS], ["met", UNLINKED]] },
@@ -456,7 +296,8 @@ test("no score or count value reaches the page, and nothing on it depends on one
   await settle();
   assert.deepEqual(b.shapes(), a.shapes());
 
-  const allowed = new Set(["mind", "nm", "kd", "met", "loading", "seam", "who", "arrow", "note", "none", "when", "door", "dn", "dm"]);
+  // "n" is a name element and "st" the stored form after a name the rule read (src/pages/name-view.js).
+  const allowed = new Set(["mind", "nm", "n", "st", "kd", "met", "loading", "seam", "who", "arrow", "note", "none", "when", "door", "dn", "dm"]);
   for (const name of a.classNames) assert.ok(allowed.has(name), "a class name that is not one of the fixed ones: " + name);
   assert.deepEqual(a.forbidden, []);
 });
@@ -540,7 +381,8 @@ test("rating submissions show rater, rated, note or \"no note\", and date; only 
   }));
   assert.deepEqual(rows, [
     { cls: "seam", who: [["A", "/guests/zeta", "zeta"], ["SPAN", undefined, "→"], ["A", "/guests/Alpha", "Alpha"]], rest: [["note", "met at the door"], ["when", "2026-08-02 06:04"]] },
-    { cls: "seam", who: [["SPAN", undefined, "ghost"], ["SPAN", undefined, "→"], ["A", "/guests/%E8%B3%93", "賓"]], rest: [["note none", "no note"], ["when", "date not recorded"]] },
+    // The link's text is the name alone; the stored form follows it, outside the link.
+    { cls: "seam", who: [["SPAN", undefined, "ghost"], ["SPAN", undefined, "→"], ["A", "/guests/%E8%B3%93", "賓"], ["SPAN", undefined, " (stored as %E8%B3%93)"]], rest: [["note none", "no note"], ["when", "date not recorded"]] },
     { cls: "seam", who: [["SPAN", undefined, "<b>x</b>"], ["SPAN", undefined, "→"], ["A", "/guests/mid", "mid"]], rest: [["note", HOSTILE_NOTE], ["when", "<i>when</i>"]] }
   ]);
   assert.doesNotMatch(a.page.meets.textContent, /competence|honesty|presence|care/);
@@ -714,22 +556,8 @@ test("/arena uses no superlative and no rank word except to say the order is not
 });
 
 // ---- the gallery ----
-function galleryScript() {
-  const scripts = [...GUESTS_HTML.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
-  assert.equal(scripts.length, 1);
-  return scripts[0];
-}
-
-function gallery(routes) {
-  const ids = ["wallStatus", "statusDate", "opalRoster", "opalRosterSub", "opalFresh", "opalFreshSub", "opalBreak", ...Array.from({ length: 8 }, (_, index) => "wall" + index)];
-  const dom = makeDom(ids, { strict: false });
-  const globals = guardGlobals({ document: dom.document, window: {}, fetch: (url) => routes(String(url)) }, dom.forbid);
-  vm.runInNewContext(galleryScript(), globals, { timeout: 1000, filename: "guests-page.js" });
-  return {
-    page: dom.byId, forbidden: dom.forbidden,
-    doors() { return Array.from({ length: 8 }, (_, index) => dom.byId["wall" + index]).flatMap((wall) => wall.children); }
-  };
-}
+const galleryScript = () => pageScript(GUESTS_HTML);
+const gallery = (routes) => runGallery(galleryScript(), routes);
 
 function galleryRoutes(pages) {
   const roster = routesFor(pages);
@@ -741,7 +569,8 @@ const NAMED_PAGES = PAGES.map((page) => ({ ...page, agents: page.agents.filter((
 test("the gallery shares the reader, keeps the order received, and prints no rating count on a door", async () => {
   assert.equal(GUESTS_HTML.split(ROSTER_READER).length - 1, 1, "the gallery carries the shared reader once");
   assert.equal(GUESTS_HTML.split("function readRoster(").length - 1, 1);
-  assert.equal(GUESTS_HTML.split("function decRuns(").length - 1, 1);
+  assert.equal(GUESTS_HTML.split("function decRuns(").length - 1, 0, "names are shown by the name fragment (test/names.test.mjs)");
+  assert.equal(GUESTS_HTML.split("function nameView(").length - 1, 1);
 
   const g = gallery(galleryRoutes(NAMED_PAGES));
   await settle();

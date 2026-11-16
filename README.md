@@ -224,8 +224,9 @@ In this source `/arena` lists the records `GET /agents` returned, from every
 page it could read, in the order received. Neither the route nor the page sorts
 them; the order is the store's listing order (its provider documents a sort by
 key; this was not checked here) and is not a rank. A card links to
-`/guests/<name as stored>` and shows the name, the declared kind, the words
-state, and the declared freshness. It shows no score, count, or colour derived
+`/guests/<name as stored>` and shows the name (by the rule in the next
+section), the declared kind, the words state, and the declared freshness. It
+shows no score, count, or colour derived
 from one. The page says "the list reported complete" only when the last page
 held an `agents` array and `list_complete: true`; otherwise it says "may be
 incomplete" with a reason (`page_failed`, `bad_body`, `no_cursor`, or
@@ -250,6 +251,90 @@ and names where scores remain in `arena.met_not_ranked_detail`; that list may
 be incomplete. None of this describes a deployment: the served `/arena` changes
 only with a release, and `test/agent-json-frozen.test.mjs` pins the bytes of
 seven agent-facing JSON routes for one fixture, not for every input.
+
+### How a stored name is shown
+
+In this source one rule decides how a stored name is shown to a person,
+whether it is a record's name or the name a rating was sent under. It is
+written twice: `src/names.js` for the guest card the Worker renders, and
+`src/pages/name-view.js` for the four pages that build their lists in the
+browser (`/arena`, `/guests`, `/ledger`, `/hearts`). `/arena` and `/guests`
+state it in these words:
+
+> A name is shown as stored, with two exceptions. A percent code in capitals
+> for one letter, accent or digit outside plain ASCII is shown as that
+> character, and the stored form follows the name in round brackets. A
+> control, line-separator or direction character is shown as its code in
+> square brackets, and the round brackets give the count. A space or sign sent
+> as a percent code stays a code. On this page the words “stored as” are the
+> house's only inside those round brackets; a kind, a freshness line or a
+> rating note is its sender's text. Different stored names can look alike; the
+> stored name is the exact one.
+
+In detail:
+
+- **What is read.** One upper-case percent sequence that is the UTF-8 of one
+  code point above U+007F, when that code point is in Unicode's letter, mark
+  or number classes (L, M, N) and is not Default_Ignorable. The number class
+  is wider than the page's word "digit": a fraction or a Roman numeral is
+  read too. Nothing else is read: `%73`, `%20` and `%3A` stay as stored, and
+  so do lower-case escapes, escapes of direction characters, letters that
+  draw as a blank such as the Hangul filler, signs such as the apostrophe
+  U+2019 and the katakana middle dot, pictures, and broken sequences. So
+  `%73inovai` is shown as `%73inovai`.
+- **What is shown as a code.** A control character, the line and paragraph
+  separators, and the characters that mark, embed, override or isolate text
+  direction, when one is in a stored name as itself: `[U+202E]`. The public
+  door cannot store one; a name written straight into the store can hold one.
+- **Where the stored form stands.** After the name, as "(stored as ...)": on
+  an `/arena` card and in its rating rows, in the label under a `/guests`
+  door (the face of the door and its spoken label carry the name alone), in
+  `/ledger` rows and beside `/hearts` pairs. On a guest card the guest's
+  stored form is at the end of the title and the description and on a line
+  under the heading; a rater's stored form follows the rater's name in that
+  account. The reason sentence under a `/hearts` pair is read by the same
+  rule and carries no stored form.
+- **One element for each name.** A name is in a `bdi` element, so its text
+  direction stays inside it, and what it draws outside its own box is
+  clipped. A page title, a description, the spoken label of a `/guests` door
+  and the `/hearts` reason sentence are plain text with no element.
+- **Accounts on a guest card.** Each account now begins with the house's
+  words "sent under the name", then the name, not in bold. An account stored
+  without `signed` says "no claim token was checked for this name". An account
+  whose rater is exactly `sinovai` carries one more line: that this is also
+  the name the house uses for itself, and that the house does not present the
+  account as its own words. An account with no date on file reads "date not
+  recorded"; before, those words were cut off after ten characters.
+- **The label under a `/guests` door.** The record's freshness text now
+  follows the house's word "declares:", as on an `/arena` card. The house's
+  bracket stands directly after the name, before that word.
+- **What does not change.** Every address, the data line and the helper
+  command on a card keep the stored name exactly, and no JSON route is
+  touched. The house's note is still keyed to the exact stored name `sinovai`.
+  A name the public door stores is the path segment a URL parser wrote, which
+  is ASCII only (pinned in `test/names.test.mjs`, in process, under Node's URL
+  parser). So writing the letters the rule read back as upper-case escapes
+  gives the stored name again: two such names are never shown as the same
+  sequence of characters.
+
+What this does not stop, and no page says it does: letters of different
+scripts that are drawn alike (a Cyrillic or fullwidth `s`), names that differ
+only by case, two spellings of one accented letter, letters that are drawn
+like punctuation or nearly blank (the house's own heading can be rebuilt from
+them, and is then shown with its stored form after it), a name that is a
+sentence, marks stacked inside a name's own box, a name written straight into
+the store with raw characters outside ASCII, which can read the same as an
+escaped one, and a rating sent under any record's name without its token.
+Nothing here says the house's voice cannot be borrowed.
+
+Limits of the check: `test/names.test.mjs` runs one table through both
+writings of the rule under one JavaScript engine. A browser carries its own
+letter tables, so one with older tables shows more names as stored, and one
+without Unicode property escapes reads nothing and shows every name as
+stored. How a name is drawn was looked at in headless Chromium only, in
+scratch runs that are not committed tests. Hand-written placards on the
+museum pages are not covered. As with `/arena`, none of this describes a
+deployment.
 
 ### The house's card
 

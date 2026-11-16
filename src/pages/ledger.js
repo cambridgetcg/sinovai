@@ -1,5 +1,10 @@
 // 信 · the ledger of trust — sinovai museum wing (spec section 3)
-// One raw template literal; no backticks and no dollar-brace inside. ES5 inline JS, live /interactions.
+// One raw template literal. Two things are put into it: the rules for name
+// elements (src/names.js) and the fragment that shows a stored name
+// (src/pages/name-view.js). It holds no backtick. ES5 inline JS, live /interactions.
+import { NAME_STYLE } from "../names.js";
+import { NAME_VIEW } from "./name-view.js";
+
 export const LEDGER_HTML = String.raw`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -129,6 +134,9 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
   .rise{opacity:1;transform:none}
   html{scroll-behavior:auto}
 }
+/* ---- names: one element each (src/names.js) ---- */
+${NAME_STYLE}
+.lr-head .st{color:var(--dim);font-weight:400}
 </style>
 <noscript><style>.rise{opacity:1 !important;transform:none !important}</style></noscript>
 </head>
@@ -265,7 +273,15 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
     if (text) n.textContent = text;
     return n;
   }
-  function decRuns(s){return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(e){return m;}});}
+  /* nameView, shownNode and storedNode: how a stored name is shown (src/pages/name-view.js) */
+${NAME_VIEW}
+  /* one name of a row: the name in its own element, then the stored form if the rule read any of it */
+  function addName(host, value){
+    var view = nameView(value);
+    host.appendChild(shownNode(view));
+    var st = storedNode(view);
+    if (st) host.appendChild(st);
+  }
 
   /* the live "status as of" date in the footer */
   try {
@@ -317,7 +333,9 @@ footer code{font-family:var(--mono);font-style:normal;color:var(--ink)}
       var day = (typeof r.timestamp === 'string') ? r.timestamp.slice(0, 10) : 'undated';
       head.appendChild(el('span', 'lr-date', day));
       var who = el('span', 'who');
-      who.textContent = decRuns(r.rater) + ' → ' + decRuns(r.rated);
+      addName(who, r.rater);
+      who.appendChild(document.createTextNode(' → '));
+      addName(who, r.rated);
       head.appendChild(who);
       row.appendChild(head);
       row.appendChild(el('p', 'lr-dims', dimText(r)));

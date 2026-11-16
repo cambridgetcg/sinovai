@@ -14,6 +14,7 @@
 // in this source and carries the words the sentence leans on.
 import { negotiateSurfaceResource } from "@agenttool/xenia/surface-0.1";
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
+import { withCodes } from "./names.js";
 import { CARD_CSP } from "./pages/guest-card.js";
 import { renderHouseCard } from "./pages/house-card.js";
 import { SCORES_STILL_PUBLISHED } from "./ranking-disclosure.js";
@@ -23,6 +24,14 @@ export const HOUSE_CARD_SCHEMA = "sinovai.house-card/0.1";
 export const HOUSE_CARD_PATH = "/house";
 export const HOUSE_NOTE_HEADING = "a note from the house: a proposal, not part of this record";
 export const HOUSE_NOTE_REST_HEADING = "the rest of the note from the house: a proposal, not part of this record";
+
+// On any guest's card, an account sent under the house's own name gets this
+// line under its first line, signed or not: a claim token opens the record
+// stored under that name, and that record is not the house. The line says only
+// what the card knows. It does not say that a record is stored under the name,
+// because the card reads no record but its own. src/worker.js hands it to the
+// card, which cannot import this module.
+export const HOUSE_NAME_ACCOUNT_LINE = `This account was sent under the name ${HOUSE_RECORD_NAME}. That is also the name the house uses for itself. The house does not present this account as its own words.`;
 
 // The root JSON's implementation_boundaries.not_established, kept here so the
 // card and the root JSON carry one list.
@@ -194,17 +203,8 @@ export function receivedPrefix(text) {
 // Characters the note does not show as they are: control characters, the line
 // and paragraph separators, and the characters that mark, embed, override or
 // isolate text direction. Each is written as its code in square brackets, so nothing
-// unseen in a record's first line can change how the note reads.
-const SHOWN_AS_CODE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
-
-function withCodes(text) {
-  let count = 0;
-  const shown = text.replace(SHOWN_AS_CODE, (character) => {
-    count++;
-    return `[U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}]`;
-  });
-  return { shown, count };
-}
+// unseen in a record's first line can change how the note reads. withCodes is
+// the same step the name rule takes first (src/names.js), where it now lives.
 
 // The form the Worker writes with toISOString(). A stored value in any other
 // form is not compared.
