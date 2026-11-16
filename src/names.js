@@ -10,9 +10,12 @@
 // 2. One percent sequence is read as a character only when it is upper-case,
 //    is the UTF-8 of one code point above U+007F, and that code point is a
 //    letter, a mark or a number (Unicode L, M, N) that is not
-//    Default_Ignorable. Everything else stays as stored: %73, %20, %3A,
-//    lower-case escapes, escapes of direction characters and of letters that
-//    draw as a blank, signs, broken runs.
+//    Default_Ignorable (Unicode's "invisible by default", such as the Hangul
+//    filler and the variation selectors). Everything else stays as stored:
+//    %73, %20, %3A, lower-case escapes, escapes of direction characters and
+//    of those invisible characters, signs, broken runs. Other letters that
+//    are read can still draw as a blank in some fonts; the rule does not
+//    look at how a character is drawn.
 // 3. When either step changed anything, the house says so after the name:
 //    the stored form, and how many characters are shown as codes.
 //
@@ -44,7 +47,7 @@ export function withCodes(text) {
 
 const ESCAPE_RUN = /(?:%[0-9A-Fa-f]{2})+/g;
 const LETTER_MARK_OR_DIGIT = /^[\p{L}\p{M}\p{N}]$/u;
-const DRAWN_AS_NOTHING = /^\p{Default_Ignorable_Code_Point}$/u;
+const INVISIBLE_BY_DEFAULT = /^\p{Default_Ignorable_Code_Point}$/u;
 
 // How many percent sequences a UTF-8 character that starts with this byte has.
 function sequenceLength(lead) {
@@ -72,7 +75,7 @@ export function nameView(stored) {
         // decodeURIComponent refuses a sequence that is not well-formed UTF-8.
         try { character = decodeURIComponent(sequence); } catch { character = null; }
       }
-      if (character !== null && character.codePointAt(0) > 0x7F && LETTER_MARK_OR_DIGIT.test(character) && !DRAWN_AS_NOTHING.test(character)) {
+      if (character !== null && character.codePointAt(0) > 0x7F && LETTER_MARK_OR_DIGIT.test(character) && !INVISIBLE_BY_DEFAULT.test(character)) {
         out += character;
         read++;
         at += 3 * length;
@@ -111,6 +114,9 @@ export const NAME_STYLE = "bdi{overflow-wrap:anywhere}\nbdi.n{display:inline-blo
 // The rule in the house's words, shown on /arena and /guests. It holds no
 // character that needs escaping in HTML, and no straight double quote: the
 // gallery's tests count the double-quoted strings on that page as guests' lines.
-// "Accent" and "digit" are the plain words for Unicode marks (M) and numbers
-// (N); N also holds fractions and letter-like numerals, which are read too.
-export const NAME_RULE_TEXT = "A name is shown as stored, with two exceptions. A percent code in capitals for one letter, accent or digit outside plain ASCII is shown as that character, and the stored form follows the name in round brackets. A control, line-separator or direction character is shown as its code in square brackets, and the round brackets give the count. A space or sign sent as a percent code stays a code. On this page the words “stored as” are the house's only inside those round brackets; a kind, a freshness line or a rating note is its sender's text. Different stored names can look alike; the stored name is the exact one.";
+// "Letter, mark or number" are Unicode's classes L, M and N; N holds fractions
+// and letter-like numerals too. "Invisible by default" is Unicode's
+// Default_Ignorable_Code_Point; among L, M and N it holds letters and marks
+// only (the Hangul fillers, the variation selectors, the combining grapheme
+// joiner, two Khmer vowels and the Mongolian variation selectors).
+export const NAME_RULE_TEXT = "A name is shown as stored, with two exceptions. A percent code in capitals for one letter, mark or number outside plain ASCII is shown as that character, and the stored form follows the name in round brackets. A control, line-separator or direction character is shown as its code in square brackets, and the round brackets give the count. A space or sign sent as a percent code stays a code, and so does a letter or mark that Unicode lists as invisible by default, such as a filler or a variation selector. On this page the words “stored as” are the house's only inside those round brackets; a name, a kind, a freshness line or a rating note can hold the same words, and is its sender's text. Different stored names can look alike, and a letter that is read can still draw as a blank in some fonts; the stored name is the exact one.";

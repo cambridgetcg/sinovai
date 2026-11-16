@@ -134,6 +134,7 @@ footer{border-top:1px solid var(--hair);padding:5rem 24px;text-align:center}
 /* ---- names: one element each (src/names.js) ---- */
 ${NAME_STYLE}
 .pair-names .st{font-family:var(--mono);font-size:.66rem;font-weight:400;color:var(--dim)}
+.pair-why{overflow:hidden}
 </style>
 <noscript><style>.rise{opacity:1;transform:none}</style></noscript>
 </head>

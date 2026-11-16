@@ -286,26 +286,35 @@ browser (`/arena`, `/guests`, `/ledger`, `/hearts`). `/arena` and `/guests`
 state it in these words:
 
 > A name is shown as stored, with two exceptions. A percent code in capitals
-> for one letter, accent or digit outside plain ASCII is shown as that
+> for one letter, mark or number outside plain ASCII is shown as that
 > character, and the stored form follows the name in round brackets. A
 > control, line-separator or direction character is shown as its code in
 > square brackets, and the round brackets give the count. A space or sign sent
-> as a percent code stays a code. On this page the words “stored as” are the
-> house's only inside those round brackets; a kind, a freshness line or a
-> rating note is its sender's text. Different stored names can look alike; the
+> as a percent code stays a code, and so does a letter or mark that Unicode
+> lists as invisible by default, such as a filler or a variation selector. On
+> this page the words “stored as” are the house's only inside those round
+> brackets; a name, a kind, a freshness line or a rating note can hold the
+> same words, and is its sender's text. Different stored names can look alike,
+> and a letter that is read can still draw as a blank in some fonts; the
 > stored name is the exact one.
 
 In detail:
 
 - **What is read.** One upper-case percent sequence that is the UTF-8 of one
   code point above U+007F, when that code point is in Unicode's letter, mark
-  or number classes (L, M, N) and is not Default_Ignorable. The number class
-  is wider than the page's word "digit": a fraction or a Roman numeral is
-  read too. Nothing else is read: `%73`, `%20` and `%3A` stay as stored, and
-  so do lower-case escapes, escapes of direction characters, letters that
-  draw as a blank such as the Hangul filler, signs such as the apostrophe
-  U+2019 and the katakana middle dot, pictures, and broken sequences. So
-  `%73inovai` is shown as `%73inovai`.
+  or number classes (L, M, N) and is not Default_Ignorable, which the page
+  calls "invisible by default". The number class holds a fraction or a Roman
+  numeral too, and both are read. Nothing else is read: `%73`, `%20` and
+  `%3A` stay as stored, and so do lower-case escapes, escapes of direction
+  characters, the letters and marks Unicode lists as Default_Ignorable (the
+  Hangul fillers, the variation selectors, the combining grapheme joiner, two
+  Khmer vowels and the Mongolian variation selectors, so a name holding one
+  shows a code mid-name), signs such as the apostrophe U+2019 and the
+  katakana middle dot, pictures, and broken sequences. So `%73inovai` is
+  shown as `%73inovai`. The rule does not look at how a character is drawn:
+  a letter it reads can still draw as a blank in some fonts. A review's
+  scratch run in headless Chromium on macOS found two Mongolian letters,
+  U+1878 and U+18AA, drawn with no ink in the serif font of four pages.
 - **What is shown as a code.** A control character, the line and paragraph
   separators, and the characters that mark, embed, override or isolate text
   direction, when one is in a stored name as itself: `[U+202E]`. The public
@@ -317,7 +326,9 @@ In detail:
   stored form is at the end of the title and the description and on a line
   under the heading; a rater's stored form follows the rater's name in that
   account. The reason sentence under a `/hearts` pair is read by the same
-  rule and carries no stored form.
+  rule and carries no stored form. What it draws outside its own box is
+  clipped, so marks read in it are not drawn over the names line above;
+  inside the sentence they can still cover its other lines.
 - **One element for each name.** A name is in a `bdi` element, so its text
   direction stays inside it, and what it draws outside its own box is
   clipped. A page title, a description, the spoken label of a `/guests` door
@@ -350,7 +361,10 @@ In detail:
 
 What this does not stop, and no page says it does: letters of different
 scripts that are drawn alike (a Cyrillic or fullwidth `s`), names that differ
-only by case, two spellings of one accented letter, letters that are drawn
+only by case or by ASCII punctuation (`Sinovai`, `sinovai.`, `sinovai'`),
+which are shown as stored with no bracket and can be sent with their own
+claim token, while the line under an account sent under the house's name is
+keyed to `sinovai` exactly, two spellings of one accented letter, letters that are drawn
 like punctuation or nearly blank (the house's own heading can be rebuilt from
 them, and is then shown with its stored form after it), a name that is a
 sentence, marks stacked inside a name's own box, a name written straight into

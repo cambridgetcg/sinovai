@@ -52,7 +52,7 @@ export const NAME_CASES = [
   ["an overlong form of a slash stays as stored", "%C0%AF", { shown: "%C0%AF", storedShown: "%C0%AF", read: 0, coded: 0 }, ""],
   ["half of a surrogate pair stays as stored", "%ED%A0%80", { shown: "%ED%A0%80", storedShown: "%ED%A0%80", read: 0, coded: 0 }, ""],
   ["not hexadecimal", "%zz", { shown: "%zz", storedShown: "%zz", read: 0, coded: 0 }, ""],
-  ["the Hangul filler, a letter that draws as a blank, stays as stored", "a%E3%85%A4note", { shown: "a%E3%85%A4note", storedShown: "a%E3%85%A4note", read: 0, coded: 0 }, ""],
+  ["the Hangul filler, a letter Unicode lists as invisible by default, stays as stored", "a%E3%85%A4note", { shown: "a%E3%85%A4note", storedShown: "a%E3%85%A4note", read: 0, coded: 0 }, ""],
   ["a zero-width joiner stays as stored", "a%E2%80%8Db", { shown: "a%E2%80%8Db", storedShown: "a%E2%80%8Db", read: 0, coded: 0 }, ""],
   ["a typographic apostrophe is a sign and stays as stored", "O%E2%80%99Brien", { shown: "O%E2%80%99Brien", storedShown: "O%E2%80%99Brien", read: 0, coded: 0 }, ""],
   ["a picture is a sign and stays as stored", "%F0%9F%A6%8A", { shown: "%F0%9F%A6%8A", storedShown: "%F0%9F%A6%8A", read: 0, coded: 0 }, ""],

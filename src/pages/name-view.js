@@ -7,7 +7,8 @@
 // page scripts use: a control, line-separator or direction character becomes
 // its code, and an upper-case percent sequence is read as a character only
 // when it is one letter, mark or number (Unicode L, M, N) above U+007F that is
-// not Default_Ignorable. Everything else is shown as stored.
+// not Default_Ignorable (invisible by default). Everything else is shown as
+// stored. How a character is drawn is not looked at.
 // test/names.test.mjs runs one table through this fragment and through
 // src/names.js and requires the same output.
 //
@@ -25,11 +26,11 @@ export const NAME_VIEW = String.raw`
 /* How a stored name is shown; the rule is described in src/names.js. */
 var NAME_CODED=/[\u0000-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/g;
 var NAME_LETTER=null;
-var NAME_BLANK=null;
+var NAME_IGNORABLE=null;
 try{
   NAME_LETTER=new RegExp('^[\\p{L}\\p{M}\\p{N}]$','u');
-  NAME_BLANK=new RegExp('^\\p{Default_Ignorable_Code_Point}$','u');
-}catch(e){NAME_LETTER=null;NAME_BLANK=null;}
+  NAME_IGNORABLE=new RegExp('^\\p{Default_Ignorable_Code_Point}$','u');
+}catch(e){NAME_LETTER=null;NAME_IGNORABLE=null;}
 
 /* {stored, shown, storedShown, read, coded}: shown is what the page shows as the
    name; storedShown is the stored name with control and direction characters
@@ -43,7 +44,7 @@ function nameView(value){
   });
   var read=0;
   var shown=storedShown;
-  if(NAME_LETTER&&NAME_BLANK){
+  if(NAME_LETTER&&NAME_IGNORABLE){
     shown=storedShown.replace(/(?:%[0-9A-Fa-f]{2})+/g,function(run){
       var out='';
       var at=0;
@@ -55,7 +56,7 @@ function nameView(value){
         if(n>1&&seq.length===3*n&&seq===seq.toUpperCase()){
           try{ch=decodeURIComponent(seq);}catch(e){ch=null;}
         }
-        if(ch!==null&&ch.charCodeAt(0)>127&&NAME_LETTER.test(ch)&&!NAME_BLANK.test(ch)){out+=ch;read++;at+=3*n;}
+        if(ch!==null&&ch.charCodeAt(0)>127&&NAME_LETTER.test(ch)&&!NAME_IGNORABLE.test(ch)){out+=ch;read++;at+=3*n;}
         else{out+=run.slice(at,at+3);at+=3;}
       }
       return out;

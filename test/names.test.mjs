@@ -117,6 +117,29 @@ test("one table, both sides: the Worker's rule and the page fragment give the sa
   assert.deepEqual(browser.forbidden, []);
 });
 
+test("raw text the rule does not code keeps its code points: no normalisation on either side or in the house's note", async () => {
+  // Review finding R1: a normalisation slipped into withCodes would have passed every test.
+  const browser = browserSide();
+  // Decomposed e-acute, the Angstrom sign, a ligature, a fullwidth letter, conjoining jamo: each changes under NFC or NFKC.
+  const raw = ["cafe\u0301", "\u212B", "\uFB01", "\uFF33inovai", "\u1100\u1161"];
+  for (const text of raw) {
+    assert.notEqual(text.normalize("NFKC"), text, "the fixture is one a normalisation changes");
+    assert.deepEqual(withCodes(text), { shown: text, count: 0 });
+    for (const view of [nameView(text), browser.view(text)]) {
+      assert.deepEqual(view, { stored: text, shown: text, storedShown: text, read: 0, coded: 0 }, JSON.stringify(text));
+    }
+  }
+  const { houseNoteFor } = await import("../src/house.js");
+  const start = raw.join(" ");
+  const note = houseNoteFor({ name: "sinovai", guest: { state_md: start + "\nname: x\n" }, interactions: [] });
+  assert.equal(note.received_start.text, start);
+  assert.equal(note.received_start.characters, [...start].length);
+  // A rater's name written straight into the store keeps its code points in the account head.
+  const html = await card(storeOf({ sol: {} }, { sol: [storedRating("cafe\u0301", "sol")] }), "/guests/sol");
+  assert.ok(html.includes('<bdi class="n">cafe\u0301</bdi>'));
+  assert.equal(html.includes("caf\u00E9"), false);
+});
+
 test("a value that is not a string is read as its text, as the pages did before", () => {
   const browser = browserSide();
   for (const value of [undefined, null, 7, true]) {
@@ -792,7 +815,7 @@ const GUESTS_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- *
 const GUESTS_DOOR_SENTENCE = "A door opens onto that guest's card when its stored name is a usable address.";
 const GUESTS_RULE_PARAGRAPH = `    <p class="glyphs rise">${NAME_RULE_TEXT} On this wall the brackets are in the label under each door.</p>\n`;
 const LEDGER_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n.lr-head .st{color:var(--dim);font-weight:400}\n";
-const HEARTS_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n.pair-names .st{font-family:var(--mono);font-size:.66rem;font-weight:400;color:var(--dim)}\n";
+const HEARTS_NAME_RULES = "/* ---- names: one element each (src/names.js) ---- */\n" + NAME_STYLE + "\n.pair-names .st{font-family:var(--mono);font-size:.66rem;font-weight:400;color:var(--dim)}\n.pair-why{overflow:hidden}\n";
 const CARD_NAME_RULES = NAME_STYLE + "\n.src{overflow-wrap:anywhere}\n";
 
 async function servedArena() {
@@ -801,10 +824,11 @@ async function servedArena() {
 
 test("the rule is stated once on /arena and once on /guests, in the house's words, and says what it does not stop", async () => {
   assert.equal(NAME_RULE_TEXT,
-    "A name is shown as stored, with two exceptions. A percent code in capitals for one letter, accent or digit outside plain ASCII is shown as that character, and the stored form follows the name in round brackets. " +
-    "A control, line-separator or direction character is shown as its code in square brackets, and the round brackets give the count. A space or sign sent as a percent code stays a code. " +
-    "On this page the words “stored as” are the house's only inside those round brackets; a kind, a freshness line or a rating note is its sender's text. " +
-    "Different stored names can look alike; the stored name is the exact one.");
+    "A name is shown as stored, with two exceptions. A percent code in capitals for one letter, mark or number outside plain ASCII is shown as that character, and the stored form follows the name in round brackets. " +
+    "A control, line-separator or direction character is shown as its code in square brackets, and the round brackets give the count. " +
+    "A space or sign sent as a percent code stays a code, and so does a letter or mark that Unicode lists as invisible by default, such as a filler or a variation selector. " +
+    "On this page the words “stored as” are the house's only inside those round brackets; a name, a kind, a freshness line or a rating note can hold the same words, and is its sender's text. " +
+    "Different stored names can look alike, and a letter that is read can still draw as a blank in some fonts; the stored name is the exact one.");
   assert.doesNotMatch(NAME_RULE_TEXT, /[<>&"]/, "it goes into a page as it is");
   assert.doesNotMatch(NAME_RULE_TEXT, /cannot be (?:borrowed|copied|imitated)|\bverified\b|\bproves?\b|\bsafe\b|\bfake\b|\bforged?\b|\bspoof/i);
 
@@ -832,6 +856,21 @@ test("the rule is stated once on /arena and once on /guests, in the house's word
     assert.equal(view("a%20b%3Ac%2Cd%E2%80%99").shown, "a%20b%3Ac%2Cd%E2%80%99", "a space or sign stays a code");
     // One of each kind the sentence names: a control, a line separator, a direction character.
     assert.equal(view("a\u0007b\u2028c\u202E").shown, "a[U+0007]b[U+2028]c[U+202E]");
+    // A mark that is not an accent and a number that is not a digit are read (findings guest-text-2, ATK-7).
+    assert.equal(view("%E2%83%9D").shown, cp(0x20DD), "an enclosing mark");
+    assert.equal(view("%C2%BD").shown, cp(0xBD), "a fraction");
+    // A filler and a variation selector stay codes, mid-name too.
+    assert.equal(view("%ED%95%9C%E3%85%A4%EA%B8%80").shown, "한%E3%85%A4글", "the Hangul filler");
+    assert.equal(view("%E8%91%9B%F3%A0%84%80%E5%9F%8E").shown, "葛%F3%A0%84%80城", "an ideographic variation selector");
+  }
+  // "A letter or mark": every character the rule leaves as stored for being invisible by default is a letter or a mark, never a number.
+  for (let point = 0x80; point <= 0x10FFFF; point++) {
+    if (point >= 0xD800 && point <= 0xDFFF) continue;
+    const character = cp(point);
+    if (/^[\p{L}\p{M}\p{N}]$/u.test(character) && /^\p{Default_Ignorable_Code_Point}$/u.test(character)) {
+      assert.ok(/^[\p{L}\p{M}]$/u.test(character), "U+" + point.toString(16));
+      assert.equal(nameView(escaped(character)).read, 0, "U+" + point.toString(16));
+    }
   }
   assert.equal(browser.globals.storedNode(browser.globals.nameView("a\u0007b\u2028c\u202E")).textContent, " (3 characters shown as codes in square brackets)");
   // The sentence names every kind of character the rule shows as a code: nothing outside these three is coded.
