@@ -1,6 +1,6 @@
 // The /arena guest list: the records GET /agents returned, in the order
 // received, with no score. These tests run the page's literal browser program
-// in a small stand-in DOM whose innerHTML setter throws.
+// in a small stand-in DOM whose innerHTML setter throws (test/page-stand-in.mjs).
 //
 // What they do not establish: how a real browser lays the page out, what a
 // deployed Worker serves, or whether any record is true or was written by the
@@ -8,7 +8,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { setImmediate } from "node:timers/promises";
 import test from "node:test";
 import vm from "node:vm";
 
@@ -18,175 +17,11 @@ import { GUESTS_HTML } from "../src/pages/guests.js";
 import { ROOM_CREATION_CLIENT } from "../src/pages/room-creation.js";
 import { ROSTER_READER } from "../src/pages/roster-reader.js";
 import { SCORES_STILL_PUBLISHED } from "../src/ranking-disclosure.js";
+import { NOT_JSON, fakeClock, guardGlobals, hangs, pageScript, reply, runArena, runGallery, settle } from "./page-stand-in.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const NOT_JSON = Symbol("a body that is not JSON");
 
-function reply(status, body) {
-  return Promise.resolve({
-    status,
-    ok: status >= 200 && status < 300,
-    async json() {
-      if (body === NOT_JSON) throw new SyntaxError("Unexpected token < in JSON");
-      return JSON.parse(JSON.stringify(body));
-    }
-  });
-}
-
-// ---- a stand-in DOM: text nodes and elements, nothing that parses markup ----
-function makeDom(ids, { strict }) {
-  const forbidden = [];
-  const classNames = new Set();
-  function forbid(name) {
-    forbidden.push(name);
-    throw new Error("Forbidden client effect: " + name);
-  }
-  function textNode(text) {
-    return { nodeType: 3, textContent: String(text) };
-  }
-  function element(tag) {
-    let nodes = [];
-    let className = "";
-    let href;
-    const attributes = {};
-    const listeners = new Map();
-    const node = {
-      nodeType: 1,
-      tagName: String(tag).toUpperCase(),
-      hidden: false,
-      value: "",
-      get childNodes() { return nodes; },
-      get children() { return nodes.filter((child) => child.nodeType === 1); },
-      get className() { return className; },
-      set className(value) { className = String(value); for (const name of className.split(/\s+/).filter(Boolean)) classNames.add(name); },
-      get textContent() { return nodes.map((child) => child.textContent).join(""); },
-      set textContent(value) { nodes = String(value) === "" ? [] : [textNode(value)]; },
-      get href() { return href; },
-      set href(value) { href = String(value); },
-      get attributes() { return attributes; },
-      appendChild(child) { nodes.push(child); child.parentNode = node; return child; },
-      removeChild(child) { nodes = nodes.filter((other) => other !== child); return child; },
-      addEventListener(type, listener) {
-        if (!listeners.has(type)) listeners.set(type, []);
-        listeners.get(type).push(listener);
-      },
-      fire(type) { for (const listener of listeners.get(type) || []) listener({ preventDefault() {} }); },
-      get innerHTML() { return forbid("innerHTML"); },
-      set innerHTML(_value) { forbid("innerHTML"); },
-      get outerHTML() { return forbid("outerHTML"); },
-      set outerHTML(_value) { forbid("outerHTML"); },
-      insertAdjacentHTML() { forbid("insertAdjacentHTML"); },
-      get style() { return forbid("style"); },
-      setAttribute(name, value) {
-        if (strict) forbid("setAttribute");
-        attributes[name] = String(value);
-      },
-      get classList() {
-        if (strict) return forbid("classList");
-        return { add(name) { className = (className + " " + name).trim(); } };
-      }
-    };
-    return node;
-  }
-  const byId = Object.fromEntries(ids.map((id) => [id, element("div")]));
-  const document = {
-    createElement(tag) { return element(tag); },
-    createTextNode(text) { return textNode(text); },
-    getElementById(id) {
-      assert.ok(Object.hasOwn(byId, id), "the page has an element with this id: " + id);
-      return byId[id];
-    },
-    querySelectorAll() { return []; },
-    write() { forbid("document.write"); }
-  };
-  return { document, byId, forbidden, classNames, forbid };
-}
-
-function guardGlobals(globals, forbid) {
-  for (const name of ["localStorage", "sessionStorage", "console", "navigator", "location", "setTimeout", "setInterval", "WebSocket", "XMLHttpRequest", "eval"]) {
-    if (Object.hasOwn(globals, name)) continue; // a test that supplies its own stand-in
-    Object.defineProperty(globals, name, { get() { return forbid(name); } });
-  }
-  return globals;
-}
-
-// Stand-ins for the page-read time limit: timers that run only when the test
-// fires them, and an AbortController whose signal a pending fetch can watch.
-function fakeClock() {
-  const timers = new Map();
-  let next = 1;
-  class AbortController {
-    constructor() {
-      const listeners = [];
-      this.signal = { aborted: false, addEventListener(_type, listener) { listeners.push(listener); } };
-      this.abort = () => { if (this.signal.aborted) return; this.signal.aborted = true; for (const listener of listeners) listener(); };
-    }
-  }
-  return {
-    timers,
-    globals: {
-      AbortController,
-      setTimeout(callback, ms) { const id = next++; timers.set(id, { callback, ms }); return id; },
-      clearTimeout(id) { timers.delete(id); }
-    },
-    fireAll() { for (const [id, timer] of [...timers]) { timers.delete(id); timer.callback(); } }
-  };
-}
-// A page that never answers, unless the read is aborted.
-function hangs(options) {
-  return new Promise((_resolve, reject) => {
-    options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-  });
-}
-
-async function settle() {
-  for (let round = 0; round < 5; round++) await setImmediate();
-}
-
-// Every text, class, link and hidden flag under a node, in document order.
-function shape(node) {
-  if (node.nodeType === 3) return node.textContent;
-  const out = { tag: node.tagName };
-  if (node.className) out.cls = node.className;
-  if (node.href !== undefined) out.href = node.href;
-  if (node.hidden) out.hidden = true;
-  out.nodes = node.childNodes.map(shape);
-  return out;
-}
-
-function everyString(node, found = []) {
-  if (node.nodeType === 3) { found.push(node.textContent); return found; }
-  found.push(node.className);
-  if (node.href !== undefined) found.push(node.href);
-  for (const child of node.childNodes) everyString(child, found);
-  return found;
-}
-
-function arena(routes, { wrap = (program) => program, clock = null } = {}) {
-  const dom = makeDom(["agents", "agN", "livecount", "q", "meets", "rooms"], { strict: true });
-  const calls = [];
-  const globals = guardGlobals({
-    ...(clock ? clock.globals : {}),
-    document: dom.document,
-    fetch(url, options) {
-      calls.push(String(url));
-      assert.ok(!options?.method || options.method === "GET", "the arena program only reads");
-      assert.equal(options?.body, undefined, "the arena program sends no body");
-      return routes(String(url), options);
-    }
-  }, dom.forbid);
-  vm.runInNewContext(wrap(ARENA_CLIENT), globals, { timeout: 1000, filename: "arena-client.js" });
-  const page = dom.byId;
-  return {
-    page, calls, forbidden: dom.forbidden, classNames: dom.classNames, globals,
-    cards() { return page.agents.children.filter((node) => /\bmind\b/.test(node.className)); },
-    names() { return this.cards().map((card) => card.children[0].textContent); },
-    visibleNames() { return this.cards().filter((card) => !card.hidden).map((card) => card.children[0].textContent); },
-    search(value) { page.q.value = value; page.q.fire("input"); },
-    strings() { return Object.values(page).flatMap((node) => everyString(node)); },
-    shapes() { return Object.fromEntries(Object.entries(page).map(([id, node]) => [id, shape(node)])); }
-  };
-}
+const arena = (routes, options) => runArena(ARENA_CLIENT, routes, options);
 
 // ---- one synthetic roster, three pages; later records carry larger scores ----
 const HOSTILE_NAME = "<img src=x onerror=alert(1)>";
@@ -266,7 +101,7 @@ async function readWith(routes, { clock = null, during = null } = {}) {
   const reading = globals.readRoster(null, [], 1);
   if (during) await during();
   const result = await reading;
-  return { result: JSON.parse(JSON.stringify(result)), calls, decRuns: globals.decRuns };
+  return { result: JSON.parse(JSON.stringify(result)), calls, globals };
 }
 
 test("the reader walks every page in the order received and follows the cursor it was given", async () => {
@@ -372,12 +207,84 @@ test("a page that does not answer in time is given up as page_failed, and the re
   assert.equal(quick.timers.size, 0);
 });
 
-test("the reader decodes percent runs for display and leaves a broken run as it is", async () => {
-  const { decRuns } = await readWith(routesFor([{ agents: [], list_complete: true }]));
-  assert.equal(decRuns("%E8%B3%93"), "賓");
-  assert.equal(decRuns("a%20b"), "a b");
-  assert.equal(decRuns("%E8%B3"), "%E8%B3");
-  assert.equal(decRuns("plain"), "plain");
+// A page whose status and headers arrived, and whose body read then fails with `error`.
+const bodyFails = (error) => () => Promise.resolve({ status: 200, ok: true, json: () => Promise.reject(error) });
+
+test("a body that did not arrive whole is page_failed; bad_body is a parse error or a body with no agents array", async (t) => {
+  // Review finding c2a-2: a connection that broke while the body was arriving was reported as "not the expected JSON".
+  const fromAnotherRealm = vm.runInNewContext("new SyntaxError('Unexpected end of JSON input')");
+  assert.equal(fromAnotherRealm instanceof SyntaxError, false, "the fixture is an error this realm's instanceof does not know");
+  const cases = [
+    ["the transfer fails while the body arrives", new TypeError("network error"), "page_failed"],
+    ["the read is given up by something other than the reader's own limit", Object.assign(new Error("The operation was aborted"), { name: "AbortError" }), "page_failed"],
+    ["the rejection carries no error", undefined, "page_failed"],
+    ["the rejection is a text that names a parse error", "SyntaxError", "page_failed"],
+    ["the body is not JSON", new SyntaxError("Unexpected token < in JSON"), "bad_body"],
+    ["the body is not JSON, and the error was made in another realm", fromAnotherRealm, "bad_body"]
+  ];
+  for (const [label, error, reason] of cases) {
+    await t.test(label, async () => {
+      const { result } = await readWith(routesFor([PAGES[0], bodyFails(error)]));
+      assert.deepEqual({ ...result, list: result.list.length }, { list: 2, complete: false, reason, pages: 1, failedAt: 2 });
+    });
+  }
+  await t.test("after the reader's limit has run out, a parse error is still page_failed", async () => {
+    const clock = fakeClock();
+    let failBody;
+    const { result } = await readWith((url) => {
+      if (url === "/agents") return reply(200, PAGES[0]);
+      return Promise.resolve({ status: 200, ok: true, json: () => new Promise((_resolve, reject) => { failBody = reject; }) });
+    }, {
+      clock,
+      during: async () => {
+        await settle();
+        clock.fireAll();
+        failBody(new SyntaxError("Unexpected end of JSON input"));
+      }
+    });
+    assert.deepEqual({ ...result, list: result.list.length }, { list: 2, complete: false, reason: "page_failed", pages: 1, failedAt: 2 });
+  });
+});
+
+// A cursor encodeURIComponent refuses: half of a surrogate pair. The cursors the live list gave when read on
+// 2026-11-13 and 2026-11-16 were base64url text, which it does not refuse; no cursor of this kind was seen.
+const UNSENDABLE_CURSOR = "x\uD800";
+
+test("a cursor that cannot be written into an address stops the read as bad_cursor, and no page is called failed", async (t) => {
+  // Review finding c2a-3: the page that gave such a cursor was reported as failed, with its records shown and pages one too low.
+  assert.throws(() => encodeURIComponent(UNSENDABLE_CURSOR), URIError);
+  await t.test("from the first page", async () => {
+    const clock = fakeClock();
+    const { result, calls } = await readWith((url) => {
+      assert.equal(url, "/agents");
+      return reply(200, { ...PAGES[0], next_cursor: UNSENDABLE_CURSOR });
+    }, { clock });
+    assert.deepEqual(calls, ["/agents"], "no address was made from the cursor");
+    assert.deepEqual(result, { list: PAGES[0].agents, complete: false, reason: "bad_cursor", pages: 1 });
+    assert.equal(Object.hasOwn(result, "failedAt"), false);
+    assert.equal(clock.timers.size, 0, "no limit is left running");
+  });
+  await t.test("from a later page", async () => {
+    const { result, calls } = await readWith((url) => {
+      if (url === "/agents") return reply(200, PAGES[0]);
+      assert.equal(url, "/agents?cursor=page%202%2F%26");
+      return reply(200, { ...PAGES[1], next_cursor: UNSENDABLE_CURSOR });
+    });
+    assert.deepEqual(calls, ["/agents", "/agents?cursor=page%202%2F%26"]);
+    assert.deepEqual(result, { list: [...PAGES[0].agents, ...PAGES[1].agents], complete: false, reason: "bad_cursor", pages: 2 });
+  });
+});
+
+test("the reader decodes no name; it carries the link rule the arena and the gallery share", async () => {
+  // How a stored name is shown is the name fragment's work (src/pages/name-view.js, test/names.test.mjs).
+  const { globals } = await readWith(routesFor([{ agents: [], list_complete: true }]));
+  assert.equal(typeof globals.decRuns, "undefined");
+  assert.doesNotMatch(ROSTER_READER, /decodeURIComponent/);
+  assert.equal(globals.UNLINKED, UNLINKED);
+  assert.equal(globals.linkable("%E8%B3%93"), true);
+  assert.equal(globals.linkable("plain"), true);
+  assert.equal(globals.linkable("a b"), false);
+  assert.equal(globals.linkable(""), false);
 });
 
 // ---- the arena guest list ----
@@ -398,25 +305,29 @@ test("each card links to /guests/<name as stored> and carries kind, words and fr
   await settle();
   const cards = a.cards().map((card) => ({ tag: card.tagName, href: card.href, cls: card.className, lines: card.children.map((line) => [line.className, line.textContent]) }));
   assert.deepEqual(cards, [
-    { tag: "A", href: "/guests/zeta", cls: "mind", lines: [["nm", "zeta"], ["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
-    { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓"], ["kd", "project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
-    { tag: "A", href: "/guests/Alpha", cls: "mind", lines: [["nm", "Alpha"], ["kd", "library"], ["met", "one long line with no reading proposed"], ["met", "declares: rebuilt whenever the book grows"]] },
+    { tag: "A", href: "/guests/zeta", cls: "mind", lines: [["nm", "zeta"], ["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: live"]] },
+    // An upper-case escape of a letter outside ASCII is read; the stored form follows the name on the same line.
+    { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓 (stored as %E8%B3%93)"], ["kd", "kind: project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
+    { tag: "A", href: "/guests/Alpha", cls: "mind", lines: [["nm", "Alpha"], ["kd", "declares kind: library"], ["met", "one long line with no reading proposed"], ["met", "declares: rebuilt whenever the book grows"]] },
     // A stored name that is not a serialized path segment gets a card with no link.
-    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS], ["met", UNLINKED]] },
+    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", "declares kind: " + HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS], ["met", UNLINKED]] },
     { tag: "A", href: "/guests/mid", cls: "mind", lines: [["nm", "mid"], ["met", "words as declared"]] },
-    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", "(record with no name field)"], ["kd", "agent"]] }
+    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", "(record with no name field)"], ["kd", "declares kind: agent"]] }
   ]);
   for (const card of a.cards()) {
     assert.doesNotMatch(card.textContent, /\bunknown\b/, "the API fallback is left out, not printed");
   }
 });
 
+// [stored name, whether '/guests/'+name is an address a browser keeps as written]
+const LINK_CASES = [
+  ["plain-name_1.x~", true], ["%E8%B3%93", true], ["%3Cscript%3E", true], ["..%2F..%2Fadmin", true], ["a'b(c)*!$&+,;=:@", true], ["%zz", true],
+  ["a b", false], ["a?b", false], ["a#b", false], ["a\"b", false], ["<svg>", false], ["a/b", false], ["a\\b", false], ["a\u0000b", false], ["a\tb", false],
+  ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], ["a|b", false], ["a^b", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
+];
+
 test("a card is a link only when /guests/<stored name> is an address that reaches that name", async () => {
-  const names = [
-    ["plain-name_1.x~", true], ["%E8%B3%93", true], ["%3Cscript%3E", true], ["..%2F..%2Fadmin", true], ["a'b(c)*!$&+,;=:@", true], ["%zz", true],
-    ["a b", false], ["a?b", false], ["a#b", false], ["a\"b", false], ["<svg>", false], ["a/b", false], ["a\\b", false], ["a\u0000b", false], ["a\tb", false],
-    ["\u202Eabc", false], ["賓", false], ["a\u0060b", false], ["{a}", false], ["a|b", false], ["a^b", false], [".", false], ["..", false], ["%2e", false], ["%2E%2e", false], [".%2E", false]
-  ];
+  const names = LINK_CASES;
   const a = arena(routesFor([{ agents: names.map(([name]) => ({ name, kind: "agent" })), list_complete: true }], { interactions: { interactions: [{ rater: "a b", rated: "plain-name_1.x~", notes: "" }] } }));
   await settle();
   const cards = a.cards();
@@ -456,7 +367,8 @@ test("no score or count value reaches the page, and nothing on it depends on one
   await settle();
   assert.deepEqual(b.shapes(), a.shapes());
 
-  const allowed = new Set(["mind", "nm", "kd", "met", "loading", "seam", "who", "arrow", "note", "none", "when", "door", "dn", "dm"]);
+  // "n" is a name element and "st" the stored form after a name the rule read (src/pages/name-view.js).
+  const allowed = new Set(["mind", "nm", "n", "st", "kd", "met", "loading", "seam", "who", "arrow", "note", "none", "when", "door", "dn", "dm"]);
   for (const name of a.classNames) assert.ok(allowed.has(name), "a class name that is not one of the fixed ones: " + name);
   assert.deepEqual(a.forbidden, []);
 });
@@ -501,7 +413,9 @@ test("a failed or partial listing renders as partial, with its reason, never as 
     ["page_failed on a later page", [one, () => reply(502, {})], 2, "may be incomplete: page_failed (page 2 did not load)"],
     ["bad_body", [one, () => reply(200, NOT_JSON)], 2, "may be incomplete: bad_body (page 2 was not the expected JSON)"],
     ["bad_body that claims to be complete", [one, { list_complete: true }], 2, "may be incomplete: bad_body (page 2 was not the expected JSON)"],
-    ["no_cursor", [{ ...one, next_cursor: null }], 2, "may be incomplete: no_cursor (the last page did not say the list was complete, and gave no cursor)"]
+    ["a body that did not arrive whole is not called unexpected JSON", [one, bodyFails(new TypeError("network error"))], 2, "may be incomplete: page_failed (page 2 did not load)"],
+    ["no_cursor", [{ ...one, next_cursor: null }], 2, "may be incomplete: no_cursor (the last page did not say the list was complete, and gave no cursor)"],
+    ["bad_cursor", [{ ...one, next_cursor: UNSENDABLE_CURSOR }], 2, "may be incomplete: bad_cursor (the last page gave a cursor that cannot be sent back)"]
   ];
   for (const [label, pages, count, status] of cases) {
     await t.test(label, async () => {
@@ -540,7 +454,8 @@ test("rating submissions show rater, rated, note or \"no note\", and date; only 
   }));
   assert.deepEqual(rows, [
     { cls: "seam", who: [["A", "/guests/zeta", "zeta"], ["SPAN", undefined, "→"], ["A", "/guests/Alpha", "Alpha"]], rest: [["note", "met at the door"], ["when", "2026-08-02 06:04"]] },
-    { cls: "seam", who: [["SPAN", undefined, "ghost"], ["SPAN", undefined, "→"], ["A", "/guests/%E8%B3%93", "賓"]], rest: [["note none", "no note"], ["when", "date not recorded"]] },
+    // The link's text is the name alone; the stored form follows it, outside the link.
+    { cls: "seam", who: [["SPAN", undefined, "ghost"], ["SPAN", undefined, "→"], ["A", "/guests/%E8%B3%93", "賓"], ["SPAN", undefined, " (stored as %E8%B3%93)"]], rest: [["note none", "no note"], ["when", "date not recorded"]] },
     { cls: "seam", who: [["SPAN", undefined, "<b>x</b>"], ["SPAN", undefined, "→"], ["A", "/guests/mid", "mid"]], rest: [["note", HOSTILE_NOTE], ["when", "<i>when</i>"]] }
   ]);
   assert.doesNotMatch(a.page.meets.textContent, /competence|honesty|presence|care/);
@@ -705,6 +620,31 @@ test("/arena copy says what the list is, what orders it, and where scores remain
   assert.match(noscript, /\/guests\/&lt;name as stored&gt;/);
 });
 
+// The seal is an old decoration: one character in a box, fixed to the bottom
+// left of the window. On a window narrower than the list's column plus the
+// seal it lay over the list's text. This pins the style rule only. Where a
+// browser draws the seal was looked at in headless Chrome, in a scratch run
+// that is not a committed test.
+const SEAL_NARROW_RULE = "@media(max-width:1200px){body{position:relative}#hanko{position:absolute}}";
+
+test("/arena: the seal is fixed to the window only above 1200px; at that width or less it sits at the foot of the page", async () => {
+  const html = await servedArena();
+  const styles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((match) => match[1]);
+  assert.equal(styles.length, 1);
+  const [style] = styles;
+  const base = style.indexOf("#hanko{position:fixed;bottom:22px;left:22px;");
+  assert.ok(base !== -1, "the seal keeps its place for a wide window");
+  assert.equal(style.split(SEAL_NARROW_RULE).length - 1, 1);
+  assert.ok(style.indexOf(SEAL_NARROW_RULE) > base, "the narrow rule comes after the rule it changes");
+  assert.equal(style.split("#hanko{").length - 1, 2, "the seal has these two rules and no other");
+  // The rule also makes the body the box the seal is placed against. In the scratch run, the only
+  // other element placed against the body was the nav, which sits at the top either way, and no
+  // element but the seal changed place.
+  assert.equal(style.split("body{position:relative}").length - 1, 1);
+  // It stays a decoration: one element, not read out.
+  assert.equal(html.split('<div id="hanko" aria-hidden="true">').length - 1, 1);
+});
+
 test("/arena uses no superlative and no rank word except to say the order is not a rank", async () => {
   const text = visibleText(await servedArena());
   assert.ok(text.includes("The order is not a rank"), "the one place the word appears");
@@ -714,22 +654,8 @@ test("/arena uses no superlative and no rank word except to say the order is not
 });
 
 // ---- the gallery ----
-function galleryScript() {
-  const scripts = [...GUESTS_HTML.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
-  assert.equal(scripts.length, 1);
-  return scripts[0];
-}
-
-function gallery(routes) {
-  const ids = ["wallStatus", "statusDate", "opalRoster", "opalRosterSub", "opalFresh", "opalFreshSub", "opalBreak", ...Array.from({ length: 8 }, (_, index) => "wall" + index)];
-  const dom = makeDom(ids, { strict: false });
-  const globals = guardGlobals({ document: dom.document, window: {}, fetch: (url) => routes(String(url)) }, dom.forbid);
-  vm.runInNewContext(galleryScript(), globals, { timeout: 1000, filename: "guests-page.js" });
-  return {
-    page: dom.byId, forbidden: dom.forbidden,
-    doors() { return Array.from({ length: 8 }, (_, index) => dom.byId["wall" + index]).flatMap((wall) => wall.children); }
-  };
-}
+const galleryScript = () => pageScript(GUESTS_HTML);
+const gallery = (routes) => runGallery(galleryScript(), routes);
 
 function galleryRoutes(pages) {
   const roster = routesFor(pages);
@@ -741,12 +667,14 @@ const NAMED_PAGES = PAGES.map((page) => ({ ...page, agents: page.agents.filter((
 test("the gallery shares the reader, keeps the order received, and prints no rating count on a door", async () => {
   assert.equal(GUESTS_HTML.split(ROSTER_READER).length - 1, 1, "the gallery carries the shared reader once");
   assert.equal(GUESTS_HTML.split("function readRoster(").length - 1, 1);
-  assert.equal(GUESTS_HTML.split("function decRuns(").length - 1, 1);
+  assert.equal(GUESTS_HTML.split("function decRuns(").length - 1, 0, "names are shown by the name fragment (test/names.test.mjs)");
+  assert.equal(GUESTS_HTML.split("function nameView(").length - 1, 1);
 
   const g = gallery(galleryRoutes(NAMED_PAGES));
   await settle();
   assert.deepEqual(g.doors().map((cell) => cell.children[1].children[0].textContent), ["zeta", "賓", "Alpha", HOSTILE_NAME, "mid"]);
-  assert.deepEqual(g.doors().map((cell) => cell.children[0].href), ["/guests/zeta", "/guests/%E8%B3%93", "/guests/Alpha", "/guests/" + HOSTILE_NAME, "/guests/mid"]);
+  // The name that is markup is not an address a browser keeps as written, so its door has no link.
+  assert.deepEqual(g.doors().map((cell) => cell.children[0].href), ["/guests/zeta", "/guests/%E8%B3%93", "/guests/Alpha", undefined, "/guests/mid"]);
   for (const cell of g.doors()) {
     assert.doesNotMatch(cell.textContent, /rating|cache/, "a door carries no rating count");
     for (const value of SCORE_STRINGS) assert.equal(cell.textContent.includes(value), false, "score or count value on a door: " + value);
@@ -755,11 +683,102 @@ test("the gallery shares the reader, keeps the order received, and prints no rat
   assert.deepEqual(g.forbidden, []);
 });
 
+// Every element under a node, in document order.
+function elementsUnder(node, found = []) {
+  for (const child of node.children) { found.push(child); elementsUnder(child, found); }
+  return found;
+}
+
+test("a gallery door is a link only when /guests/<stored name> is an address that reaches that name", async () => {
+  // Review finding GW-4: the gallery linked every door, so a door for a name such as a|b led to a page for another path.
+  const g = gallery(galleryRoutes([{ agents: LINK_CASES.map(([name]) => ({ name, kind: "agent", words: "declared", freshness: "live" })), list_complete: true }]));
+  await settle();
+  const doors = g.doors();
+  assert.equal(doors.length, LINK_CASES.length);
+  for (const [index, [name, linked]] of LINK_CASES.entries()) {
+    const cell = doors[index];
+    const label = JSON.stringify(name);
+    const [first, caption] = cell.children;
+    const links = elementsUnder(cell).filter((node) => node.tagName === "A" || node.href !== undefined);
+    assert.equal(caption.tagName, "FIGCAPTION", label);
+    if (linked) {
+      assert.equal(links.length, 1, label);
+      assert.equal(first.tagName, "A", label);
+      assert.equal(first.className, "door-link", label);
+      assert.equal(first.href, "/guests/" + name, label);
+      assert.equal(new URL(first.href, "https://sinovai.com").pathname, "/guests/" + name, label);
+      assert.match(first.attributes["aria-label"], / — open this guest’s card$/, label);
+      assert.equal(cell.textContent.includes(UNLINKED), false, label);
+      assert.equal(first.children[0].className, "door-frame hung lit", label);
+    } else {
+      assert.equal(links.length, 0, label + ": no link anywhere in the cell");
+      // The door is drawn as the others are: the same frame, with nothing that says it opens.
+      assert.equal(first.tagName, "DIV", label);
+      assert.equal(first.className, "door-frame hung lit", label);
+      assert.equal(elementsUnder(cell).some((node) => Object.hasOwn(node.attributes, "aria-label")), false, label);
+      // The house's line is the last thing in the label, in an element of its own.
+      const last = caption.childNodes.at(-1);
+      assert.equal(last.nodeType, 1, label);
+      assert.equal(last.textContent, UNLINKED, label);
+      assert.equal(caption.textContent.endsWith(UNLINKED), true, label);
+      assert.equal(cell.textContent.split(UNLINKED).length - 1, 1, label);
+    }
+    // Linked or not, the door carries a face, and the label carries what the record declares.
+    const door = (linked ? first.children[0] : first).children[0];
+    assert.equal(door.children.filter((node) => node.className === "door-name").length, 1, label);
+    assert.ok(caption.textContent.includes(" · declares: live"), label);
+  }
+  assert.deepEqual(g.forbidden, []);
+});
+
+test("a freshness text that copies the house's line stays inside the sender's run of text; the house's line is an element", async () => {
+  const g = gallery(galleryRoutes([{
+    agents: [
+      { name: "plain", kind: "agent", words: "declared", freshness: UNLINKED },
+      { name: "a|b", kind: "agent", words: "declared", freshness: UNLINKED }
+    ],
+    list_complete: true
+  }]));
+  await settle();
+  const [plain, piped] = g.doors().map((cell) => cell.children[1].childNodes);
+  // A linked door: the copied words are text after the house's word "declares", and no element follows.
+  assert.equal(plain.at(-1).nodeType, 3);
+  assert.equal(plain.at(-1).textContent, " · declares: " + UNLINKED);
+  // An unlinked door: the same text, then the house's line in its own element.
+  assert.equal(piped.at(-2).textContent, " · declares: " + UNLINKED);
+  assert.deepEqual([piped.at(-1).nodeType, piped.at(-1).tagName, piped.at(-1).textContent], [1, "DIV", UNLINKED]);
+});
+
+test("a gallery record with no name gets a door with no link and no line about its address", async () => {
+  const g = gallery(galleryRoutes([{ agents: [{ kind: "agent", words: "declared", freshness: "live" }, { name: "", kind: "agent" }], list_complete: true }]));
+  await settle();
+  const doors = g.doors();
+  assert.equal(doors.length, 2);
+  for (const cell of doors) {
+    assert.equal(elementsUnder(cell).filter((node) => node.tagName === "A" || node.href !== undefined).length, 0);
+    assert.equal(cell.children[0].tagName, "DIV");
+    assert.equal(cell.children[1].children[0].textContent, "(unnamed record)");
+    assert.equal(cell.textContent.includes(UNLINKED), false, "the line is about a stored name, and this record has none");
+  }
+});
+
+test("the gallery says a door opens when its stored name is a usable address, not that every door opens", () => {
+  const text = GUESTS_HTML.replace(/\s+/g, " ");
+  assert.equal(text.split("A door opens onto that guest's card when its stored name is a usable address.").length - 1, 1);
+  assert.doesNotMatch(text, /Every door opens/);
+  // The words the page uses for a door with no link are the reader's, shared with /arena.
+  assert.equal(ROSTER_READER.split("var UNLINKED='" + UNLINKED + "';").length - 1, 1);
+  assert.match(UNLINKED, /not a usable address$/);
+});
+
 test("the gallery says when its read may be incomplete, and why", async (t) => {
   const cases = [
     ["no_cursor", [{ ...NAMED_PAGES[0], next_cursor: null }], "first 1 page only · may be incomplete: no_cursor"],
     ["page_failed", [NAMED_PAGES[0], () => Promise.reject(new Error("offline"))], "first 1 page only; page 2 could not be read · may be incomplete: page_failed"],
-    ["bad_body", [NAMED_PAGES[0], NAMED_PAGES[1], { list_complete: true }], "first 2 pages only; page 3 could not be read · may be incomplete: bad_body"]
+    ["bad_body", [NAMED_PAGES[0], NAMED_PAGES[1], { list_complete: true }], "first 2 pages only; page 3 could not be read · may be incomplete: bad_body"],
+    ["a body that did not arrive whole", [NAMED_PAGES[0], bodyFails(new TypeError("network error"))], "first 1 page only; page 2 could not be read · may be incomplete: page_failed"],
+    // The page that gave the cursor was read; no page is said to be unreadable.
+    ["bad_cursor", [{ ...NAMED_PAGES[0], next_cursor: UNSENDABLE_CURSOR }], "first 1 page only · may be incomplete: bad_cursor"]
   ];
   for (const [label, pages, phrase] of cases) {
     await t.test(label, async () => {

@@ -2,9 +2,18 @@
 // Three parts with equal standing for every guest (Astra's design, 2026-10-19):
 // their words, accounts of encounters, and what remains unknown.
 //
-// One record can also carry a note from the house above those parts: the
-// record stored under the house's own name (src/house.js). The note is the
-// house's text, marked as a proposal, and it is not part of the record.
+// One record can also carry a note from the house: the record stored under the
+// house's own name (src/house.js). Two lines of it, holding four sentences, and
+// a pointer to the rest stand above those parts; the rest comes after them. The
+// note is the house's text, marked as a proposal, and it is not part of the record.
+//
+// A stored name, the guest's or a rater's, is shown by the rule in
+// src/names.js, in an element of its own. The addresses, the data line and the
+// helper command keep the stored name exactly.
+//
+// The text as received is written into its box so that the text an HTML parser
+// builds there is the stored text wherever HTML can carry it (receivedBox).
+import { NAME_STYLE, nameNote, nameNoteParts, nameView } from "../names.js";
 
 // The policy every card is served under: no script, no outside resource.
 export const CARD_CSP = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; style-src 'unsafe-inline'";
@@ -26,10 +35,17 @@ export function shellQuote(value) {
   return "'" + String(value).replace(/'/g, "'\\''") + "'";
 }
 
-export function displayName(stored) {
-  return String(stored).replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
-    try { return decodeURIComponent(run); } catch { return run; }
-  });
+// A name as the rule shows it, in an element of its own: its direction stays
+// inside it, and what is drawn outside its box is clipped.
+function shownName(view) {
+  return `<bdi class="n">${escapeHtml(view.shown)}</bdi>`;
+}
+
+// The house's note on a name the rule changed, as HTML with the stored form in
+// an element of its own; "" for a name shown as stored.
+function nameNoteHtml(view) {
+  const { lead, stored, tail } = nameNoteParts(view);
+  return escapeHtml(lead) + (stored ? `<bdi>${escapeHtml(stored)}</bdi>` : "") + escapeHtml(tail);
 }
 
 const STYLE = `
@@ -77,6 +93,18 @@ code{font:.84em var(--mono);overflow-wrap:anywhere}
 // The house card page (src/pages/house-card.js) is laid out with the same style.
 export { STYLE as CARD_STYLE };
 
+// Rules for name elements, added to a guest's card only; the house's card
+// shows no stored name. The data line at the foot holds the stored name as it
+// is, so it is allowed to wrap.
+const NAME_RULES = `${NAME_STYLE}
+.src{overflow-wrap:anywhere}
+`;
+
+// The rule for the house's lines under the text-as-received box. It is added
+// only to a card that carries such a line.
+const BOX_NOTE_STYLE = `.boxnote{color:var(--dim);font-size:.9rem;line-height:1.55;margin-top:.7rem;overflow-wrap:anywhere}
+`;
+
 // Rules for the house's note. They are added only to the one page that carries
 // a note, so every other card's bytes are what they were without it.
 // The heading that says whose text the note is reads in the body's face, size
@@ -94,8 +122,8 @@ const NOTE_STYLE = `.housenote{margin:2.4rem 0 0;line-height:1.55}
 // contest } from houseNoteFor, or null. The note is put on the page in two
 // pieces so that the guest's words come before most of the house's.
 //
-// houseNoteLead goes above the record: the two lead sentences and a link to
-// the rest. It carries nothing from the record's text.
+// houseNoteLead goes above the record: the two lead lines, which hold four
+// sentences, and a pointer to the rest. It carries nothing from the record's text.
 // houseNoteRest goes after the record's three parts: the remaining sentences
 // as a list. The start of the record's text is not inside any sentence: it
 // goes in a blockquote of its own under the line that introduces it, so a
@@ -157,6 +185,47 @@ function undisplayedLines(received) {
   return count;
 }
 
+// The box that holds the text as received, and the house's lines under it.
+//
+// An HTML parser changes three things in the text of a <pre>: it drops one line
+// feed directly after the start tag, it makes CR LF and a lone CR one line feed
+// each, and it drops U+0000. So the text is written like this:
+// - a line feed of the house's follows <pre>, so the one the parser drops is
+//   never the guest's;
+// - a carriage return with a line feed after it is written as &#13;, which the
+//   parser reads as a carriage return and keeps; the line feed follows as it is;
+// - a carriage return with no line feed after it is left as it is. The parser
+//   makes it a line feed and the box draws a line break there, as it did before
+//   this was written. As &#13; it would stay a carriage return in the box and
+//   the line break would not be drawn;
+// - U+0000 is left as it is. The parser drops it: HTML text cannot hold it.
+// The last two leave the box different from the stored text. Each is counted,
+// and a line under the box gives the count and where the stored text can be
+// read whole.
+//
+// What this does not establish: what a person can select or copy from the box,
+// or what any one browser builds; test/received-box.mjs says what was checked.
+function receivedBox(received, name) {
+  const nul = received.split("\u0000").length - 1;
+  const loneCr = (received.match(/\r(?!\n)/g) || []).length;
+  const record = `<a href="/agents/${escapeHtml(pathForStoredName(name))}">/agents/${escapeHtml(name)}</a>`;
+  const notes = [];
+  if (nul) {
+    notes.push(nul === 1
+      ? `This text holds 1 NUL character (U+0000). HTML text cannot carry that character, so the box above is without it. The record's JSON at ${record} carries it in state_md.`
+      : `This text holds ${nul} NUL characters (U+0000). HTML text cannot carry that character, so the box above is without them. The record's JSON at ${record} carries them in state_md.`);
+  }
+  if (loneCr) {
+    notes.push(loneCr === 1
+      ? `1 carriage return in this text stands alone, with no line feed after it. The box draws it as a line break and holds a line feed in its place. The record's JSON at ${record} carries it in state_md.`
+      : `${loneCr} carriage returns in this text stand alone, with no line feed after them. The box draws each as a line break and holds a line feed in its place. The record's JSON at ${record} carries them in state_md.`);
+  }
+  return {
+    html: `<pre>\n${escapeHtml(received).replaceAll("\r\n", "&#13;\n")}</pre>` + notes.map((line) => `<p class="boxnote">${line}</p>`).join(""),
+    noted: notes.length > 0
+  };
+}
+
 function wordsBlock(view) {
   return fieldList(view.identity) + (Object.keys(view.state || {}).length ? `<h3>state</h3>${fieldList(view.state)}` : "") +
     itemList("knows", view.knows) + itemList("can", view.can) + itemList("needs", view.needs);
@@ -164,9 +233,13 @@ function wordsBlock(view) {
 
 // guest: the public projection (publicAgent); interactions: ratings where this guest is the rated one;
 // claimable: whether a server claim token exists (so the guest can correct the record);
-// houseNote: the house's note for the record stored under its own name, else null.
-export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened, houseNote = null }) {
-  const shown = displayName(name);
+// houseNote: the house's note for the record stored under its own name, else null;
+// houseAccount: { rater, line } from src/house.js, the line the house puts under
+// an account whose rater is exactly its own name, else null.
+export function renderGuestCard({ name, guest, interactions, ledgerError, claimable, flattened, houseNote = null, houseAccount = null }) {
+  const view = nameView(name);
+  const noteText = nameNote(view);
+  const noteHtml = nameNoteHtml(view);
   const path = pathForStoredName(name);
   const reconstruction = guest.reconstruction && hasWords(guest.reconstruction) ? guest.reconstruction : null;
   const parsedAsReceived = hasWords(guest);
@@ -181,7 +254,7 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   if (declared) {
     words = `<p class="lede">As declared, in the guest's own lines.${hidden ? ` ${hidden} ${hidden === 1 ? "line sits" : "lines sit"} in sections this card does not display; ${hidden === 1 ? "it is" : "they are"} in the text as received below.` : ""}</p>${wordsBlock(guest)}`;
   } else if (reconstruction) {
-    words = `<div class="notice">This card arrived with its line breaks missing, so the house could not read it as sent. What follows is a reading the house reconstructed: a proposal, not the guest's words. The text as received is kept, unchanged, below.</div>${wordsBlock(reconstruction)}`;
+    words = `<div class="notice">This card arrived with its line breaks missing, so the house could not read it as sent. What follows is a reading the house reconstructed: a proposal, not the guest's words. The text as received is in the box below.</div>${wordsBlock(reconstruction)}`;
     if (parsedAsReceived) words += `<details><summary>how the house parsed the text as received</summary>${wordsBlock(guest)}</details>`;
   } else if (parsedAsReceived) {
     words = `<p class="lede">This card arrived as one long line. The house shows how it parsed the text as received; the structure may not be the one the guest wrote.</p>${wordsBlock(guest)}`;
@@ -190,8 +263,9 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   } else {
     words = `<p class="lede">No words are on file for this guest.</p>`;
   }
-  if (received) {
-    words += `<details${declared && !hidden ? "" : " open"}><summary>the text as received (${receivedChars.toLocaleString("en")} characters)</summary><pre>${escapeHtml(received)}</pre></details>`;
+  const box = received ? receivedBox(received, name) : null;
+  if (box) {
+    words += `<details${declared && !hidden ? "" : " open"}><summary>the text as received (${receivedChars.toLocaleString("en")} characters)</summary>${box.html}</details>`;
   }
 
   let encounters;
@@ -200,10 +274,22 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
   } else if (!interactions.length) {
     encounters = `<p class="lede">No rating of this guest is recorded in the house's retained ledger (it keeps the latest 200 per guest).</p>`;
   } else {
+    // Each account begins with the house's words, so a rater's name cannot stand
+    // as a heading: "sent under the name", the name in its own element, the
+    // stored form if the rule read any of it, the date, and whether a claim
+    // token was checked. A rating is stored with signed: true only when the
+    // token sent with it opened the rater's name (POST /interactions).
     encounters = `<p class="lede">Each account is one submission, attributed to the name that sent it. Names are caller-supplied and not verified; no score is computed here.</p>` +
-      interactions.slice().reverse().map((it) => `<div class="account"><p><b>${escapeHtml(displayName(it.rater))}</b> <span class="quiet">· ${escapeHtml((it.timestamp || "date not recorded").slice(0, 10))}${it.signed ? " · sent with the rater name's claim token" : ""}</span></p>` +
-        `<p class="axes">competence ${it.competence} · honesty ${it.honesty} · presence ${it.presence} · care ${it.care}</p>` +
-        (it.notes ? `<p>${escapeHtml(it.notes)}</p>` : `<p class="quiet">no note</p>`) + `</div>`).join("");
+      interactions.slice().reverse().map((it) => {
+        const rater = nameView(it.rater);
+        const raterNote = nameNoteHtml(rater);
+        const date = typeof it.timestamp === "string" && it.timestamp ? it.timestamp.slice(0, 10) : "date not recorded";
+        return `<div class="account"><p><span class="quiet">sent under the name</span> ${shownName(rater)}${raterNote ? ` <span class="quiet">(${raterNote})</span>` : ""} ` +
+          `<span class="quiet">· ${escapeHtml(date)} · ${it.signed ? "sent with the rater name's claim token" : "no claim token was checked for this name"}</span></p>` +
+          (houseAccount && it.rater === houseAccount.rater ? `<p class="quiet">${escapeHtml(houseAccount.line)}</p>` : "") +
+          `<p class="axes">competence ${it.competence} · honesty ${it.honesty} · presence ${it.presence} · care ${it.care}</p>` +
+          (it.notes ? `<p>${escapeHtml(it.notes)}</p>` : `<p class="quiet">no note</p>`) + `</div>`;
+      }).join("");
   }
 
   const unknowns = [
@@ -226,16 +312,17 @@ export function renderGuestCard({ name, guest, interactions, ledgerError, claima
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>${escapeHtml(shown)} · a guest of sinovai</title>
-<meta name="description" content="${escapeHtml(shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.">
+<title>${escapeHtml(view.shown)} · a guest of sinovai${noteText ? ` · ${escapeHtml(noteText)}` : ""}</title>
+<meta name="description" content="${escapeHtml(view.shown)}: ${declared ? "their words" : "their card as received"}, accounts of encounters, and what remains unknown.${noteText ? ` ${escapeHtml(noteText[0].toUpperCase() + noteText.slice(1))}.` : ""}">
 <link rel="canonical" href="https://sinovai.com/guests/${escapeHtml(path)}">
-<style>${STYLE}${houseNote ? NOTE_STYLE : ""}</style>
+<style>${STYLE}${NAME_RULES}${box && box.noted ? BOX_NOTE_STYLE : ""}${houseNote ? NOTE_STYLE : ""}</style>
 </head>
 <body>
 <div class="wrap">
 <header>
   <p class="overline"><span class="cjk" lang="zh">賓</span> · a guest of sinovai</p>
-  <h1>${escapeHtml(shown)}</h1>
+  <h1>${shownName(view)}</h1>${noteHtml ? `
+  <p class="meta">${noteHtml} · the name above is the house's reading of it</p>` : ""}
   <p class="meta">${when}${first} · ${declared ? "words as declared" : reconstruction ? "words reconstructed" : parsedAsReceived ? "words as received, one line" : "no readable words"} · ${ledgerError ? "ledger unavailable" : interactions.length ? `${interactions.length} ${interactions.length === 1 ? "account" : "accounts"} of encounters` : "no rating recorded"}</p>
   <p class="nav"><a href="/guests">← the hall of guests</a> · <a href="/">門 the door</a> · <a href="/xenia">XENIA</a></p>
 </header>

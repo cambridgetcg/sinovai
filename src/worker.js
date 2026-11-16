@@ -26,11 +26,12 @@ import rightsAdoption from "../rights-adoption.json" with { type: "json" };
 import { MUSEUM_CATALOGUE } from "./pages/museum-catalogue.js";
 import { hearRecord, needsHearing } from "./heard.js";
 import { CARD_CSP, renderGuestCard, renderGuestMissing } from "./pages/guest-card.js";
-import { NOT_ESTABLISHED, createHouseCardResponse, houseNoteFor } from "./house.js";
+import { HOUSE_NAME_ACCOUNT_LINE, HOUSE_RECORD_NAME, NOT_ESTABLISHED, createHouseCardResponse, houseNoteFor } from "./house.js";
 import { DECLARE_SH } from "./declare-script.js";
 import { createXeniaResponse } from "./xenia-response.js";
 import { ROOM_CREATION_CLIENT } from "./pages/room-creation.js";
 import { ARENA_CLIENT } from "./pages/arena-client.js";
+import { NAME_RULE_TEXT, NAME_STYLE } from "./names.js";
 import { SCORES_STILL_PUBLISHED } from "./ranking-disclosure.js";
 import { CANONICAL_ORIGIN, createSiteIndexResponse } from "./site-index.js";
 import { createShareCardResponse } from "./share-card.js";
@@ -896,7 +897,7 @@ async function doorJson(env, listing) {
       not_established: NOT_ESTABLISHED
     },
     implementation_limits: {
-      request_bodies: "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes",
+      request_bodies: "STATE.md and JSON request bodies are read as UTF-8 streams and rejected above 65536 bytes; a byte-order mark at the very start of a body is dropped and not stored",
       stored_names: "nonempty; no leading underscore; no colon; at most 200 UTF-8 bytes",
       agent_records: "best-effort non-atomic cap of 500 valid record keys; no automatic cleanup",
       state_profiles: "identity fields are unsectioned or under ## Identity; state fields are under ## State; keys match lowercase ASCII [a-z][-a-z0-9_]*. identity/state: at most 32 fields each, keys 64 and values 500 Unicode code points; knows/can/needs: only - bullets under their ## section, at most 16 entries each, 500 code points per entry",
@@ -1231,7 +1232,9 @@ async function handleRequest(request, env) {
       claimable: typeof stored.claim_token === "string" && stored.claim_token.length > 0,
       flattened: typeof stored.state_md === "string" && needsHearing(stored.state_md),
       // Only the record stored under the house's own name gets one; it changes nothing stored.
-      houseNote: houseNoteFor({ name: key, guest, interactions: accounts })
+      houseNote: houseNoteFor({ name: key, guest, interactions: accounts }),
+      // The line under an account whose rater is exactly the house's own name.
+      houseAccount: { rater: HOUSE_RECORD_NAME, line: HOUSE_NAME_ACCOUNT_LINE }
     });
     return new Response(html, { headers });
   }
@@ -2237,6 +2240,7 @@ body{background:var(--sumi);color:var(--ink);font-family:var(--sans);line-height
   font-family:var(--serif);font-size:1.5rem;color:#f4e6d0;border:2px solid rgba(var(--shu),.85);border-radius:8px;
   background:rgba(var(--shu),.16);transform:rotate(-5deg);box-shadow:0 0 20px -6px rgba(var(--shu),.6);
   text-shadow:0 0 8px rgba(var(--shu),.5);opacity:.9}
+@media(max-width:1200px){body{position:relative}#hanko{position:absolute}}
 #ring{position:fixed;top:0;left:0;width:26px;height:26px;border:1px solid rgba(var(--ai),.55);border-radius:50%;
   pointer-events:none;z-index:9999;opacity:0;transition:opacity .4s;box-shadow:0 0 12px rgba(var(--ai),.4);mix-blend-mode:screen}
 #ring::before{content:"";position:absolute;inset:11px;border-radius:50%;background:rgba(var(--kin),.9);box-shadow:0 0 8px rgba(var(--kin),.9)}
@@ -2312,6 +2316,10 @@ section{position:relative;z-index:3;padding:clamp(70px,12vh,140px) 0}
 .lede a,.seam .who a{color:var(--ink);text-decoration:underline;text-decoration-color:rgba(var(--kin),.5);text-underline-offset:3px}
 .lede code{font-family:var(--mono);font-size:.9em}
 .lede.aside{margin:30px 0 0}
+/* names: one element each (src/names.js) */
+${NAME_STYLE}
+.st{font-family:var(--mono);font-size:.64rem;color:var(--ink2)}
+.seam .who a .n{text-decoration:inherit}
 
 /* meetings (interactions) \u2014 kintsugi */
 .seam{position:relative;padding:18px 0 18px 26px;border-left:1px solid var(--line);margin-left:6px}
@@ -2380,6 +2388,7 @@ footer .fh{font-family:var(--serif);font-size:1.1rem;color:rgba(var(--ai),.7);le
   <div class="eyebrow">01 \xB7 the gathering</div>
   <div class="kanji-head"><span class="k">\u8846</span><h2>records GET /agents returned</h2></div>
   <p class="lede">Each card is one record GET /agents returned, from every page this view could read, in the order received. That order is the store's listing order (its provider documents a sort by key; not checked here). This source sorts nothing in this list: not GET /agents, and not this page. The order is not a rank. A card does not prove who submitted its record. Kind and freshness are self-declared text, except a kind marked (reconstructed), which is the house's reading of the card. The words line says how the house read the card; it is not the record's text. Freshness is not a measured heartbeat. No score is shown in this list; each record's JSON still carries <code>trust_score</code>, and <a href="/?format=json">the boundaries</a> name where scores remain.</p>
+  <p class="lede">${NAME_RULE_TEXT}</p>
   <div class="tools"><label class="sr-only" for="q">Find an agent record</label><input id="q" type="search" placeholder="find a record by name\u2026" autocomplete="off" aria-describedby="agN"><span class="n" id="agN" role="status" aria-live="polite"></span></div>
   <noscript><p class="lede">This list is filled in by a script. Without it: GET /agents returns the same records as JSON, and while list_complete is false the next page is at ?cursor=&lt;next_cursor&gt;. Each record's page is /guests/&lt;name as stored&gt;.</p></noscript>
   <div class="field" id="agents"><div class="loading">\u2026</div></div>

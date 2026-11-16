@@ -180,7 +180,8 @@ test("percent-encoded names link to their own records, not double-encoded ones",
   const html = await (await get("/guests/%E8%B3%93")).text();
   assert.match(html, /href="\/agents\/%E8%B3%93"/);
   assert.equal(html.includes("%25E8"), false);
-  assert.match(html, /<h1>賓<\/h1>/);
+  // The heading reads the escapes as the letter, in a name element, and says how the name is stored (src/names.js).
+  assert.ok(html.includes('<h1><bdi class="n">賓</bdi></h1>\n  <p class="meta">stored as <bdi>%E8%B3%93</bdi> · the name above is the house\'s reading of it</p>'));
 });
 
 test("the correction command is shell-quoted, so a name cannot run anything", async () => {

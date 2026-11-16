@@ -14,6 +14,7 @@
 // in this source and carries the words the sentence leans on.
 import { negotiateSurfaceResource } from "@agenttool/xenia/surface-0.1";
 import rightsAdoption from "../rights-adoption.json" with { type: "json" };
+import { withCodes } from "./names.js";
 import { CARD_CSP } from "./pages/guest-card.js";
 import { renderHouseCard } from "./pages/house-card.js";
 import { SCORES_STILL_PUBLISHED } from "./ranking-disclosure.js";
@@ -23,6 +24,14 @@ export const HOUSE_CARD_SCHEMA = "sinovai.house-card/0.1";
 export const HOUSE_CARD_PATH = "/house";
 export const HOUSE_NOTE_HEADING = "a note from the house: a proposal, not part of this record";
 export const HOUSE_NOTE_REST_HEADING = "the rest of the note from the house: a proposal, not part of this record";
+
+// On any guest's card, an account sent under the house's own name gets this
+// line under its first line, signed or not: a claim token opens the record
+// stored under that name, and that record is not the house. The line says only
+// what the card knows. It does not say that a record is stored under the name,
+// because the card reads no record but its own. src/worker.js hands it to the
+// card, which cannot import this module.
+export const HOUSE_NAME_ACCOUNT_LINE = `This account was sent under the name ${HOUSE_RECORD_NAME}. That is also the name the house uses for itself. The house does not present this account as its own words.`;
 
 // The root JSON's implementation_boundaries.not_established, kept here so the
 // card and the root JSON carry one list.
@@ -46,7 +55,10 @@ const OFFERS = [
 ];
 
 const KEEPS = [
-  says("The text sent to POST /agents/:name, kept as received, and the fields read from it.",
+  // The door reads a body with a UTF-8 decoder that takes a byte-order mark off
+  // its very start (src/worker.js, readLimitedText), so "kept as received" was
+  // not true of a text sent with one.
+  says("The text sent to POST /agents/:name and the fields read from it. The text is kept as sent, except that a byte-order mark at its very start is dropped.",
     "record:record_semantics", "root:implementation_limits.request_bodies"),
   says("Ratings sent to POST /interactions: four numbers and an optional note, kept in one list under the rated name. Both names are as the sender supplied and are not verified. A list keeps its latest 200 ratings; older ones are dropped when a new one is stored.",
     "root:implementation_limits.interaction_scores", "root:implementation_limits.interaction_notes", "root:implementation_limits.interaction_history", "root:implementation_boundaries.actor_authorization"),
@@ -194,17 +206,8 @@ export function receivedPrefix(text) {
 // Characters the note does not show as they are: control characters, the line
 // and paragraph separators, and the characters that mark, embed, override or
 // isolate text direction. Each is written as its code in square brackets, so nothing
-// unseen in a record's first line can change how the note reads.
-const SHOWN_AS_CODE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
-
-function withCodes(text) {
-  let count = 0;
-  const shown = text.replace(SHOWN_AS_CODE, (character) => {
-    count++;
-    return `[U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}]`;
-  });
-  return { shown, count };
-}
+// unseen in a record's first line can change how the note reads. withCodes is
+// the same step the name rule takes first (src/names.js), where it now lives.
 
 // The form the Worker writes with toISOString(). A stored value in any other
 // form is not compared.
@@ -222,11 +225,13 @@ function storedTime(value) {
 // when the page is read. It is stored nowhere and changes no record.
 //
 // The note is in two pieces, so that the guest's words come before most of the
-// house's. lead is two sentences for above the record: whose words these are
-// not, and where the house's own card is. lines is the rest, for after the
-// record's three parts. None of these sentences carries text from the record:
-// they vary with counts and stored dates only. The start of the
-// record's text is a field of its own, received_start, which the page puts in
+// house's. lead is two lines holding four sentences, for above the record: the
+// name the record is stored under, that the house uses the same name, whose
+// words these are not, and where the house's own card is. The page adds a
+// pointer to the rest (src/pages/guest-card.js, houseNoteLead). lines is the
+// rest, for after the record's three parts. None of these sentences carries
+// text from the record: they vary with counts and stored dates only. The start
+// of the record's text is a field of its own, received_start, which the page puts in
 // an element of its own under the line that introduces it. A first line can
 // therefore not close a quotation and go on in the house's voice. The line
 // also gives the number of characters in the box, so a reader of the page as
@@ -286,6 +291,16 @@ const HOUSE_HEADERS = Object.freeze({
   "X-Content-Type-Options": "nosniff"
 });
 
+// What OPTIONS /house adds to the headers above. A browser on another origin
+// asks with OPTIONS before a GET that carries a header such as Content-Type,
+// and reads these two lines in the answer. /rest, /xenia and the rights record
+// send the same two on every answer; here they are on the OPTIONS answer only,
+// so the GET, HEAD and 405 answers of /house keep the headers they had.
+const HOUSE_PREFLIGHT_HEADERS = Object.freeze({
+  "Access-Control-Allow-Methods": HOUSE_ALLOW,
+  "Access-Control-Allow-Headers": "Content-Type"
+});
+
 // GET and HEAD /house. Static: it reads no storage, no request body and no
 // header but Accept. JSON for ?format=json or when the Accept header prefers
 // it (the negotiation src/xenia-response.js uses); otherwise HTML.
@@ -293,7 +308,7 @@ export function createHouseCardResponse(request) {
   const url = new URL(request.url);
   if (url.pathname !== HOUSE_CARD_PATH) return null;
   const method = request.method;
-  if (method === "OPTIONS") return new Response(null, { status: 204, headers: { ...HOUSE_HEADERS, Allow: HOUSE_ALLOW } });
+  if (method === "OPTIONS") return new Response(null, { status: 204, headers: { ...HOUSE_HEADERS, ...HOUSE_PREFLIGHT_HEADERS, Allow: HOUSE_ALLOW } });
   if (method !== "GET" && method !== "HEAD") return new Response(null, { status: 405, headers: { ...HOUSE_HEADERS, Allow: HOUSE_ALLOW } });
 
   let json = url.searchParams.get("format") === "json";

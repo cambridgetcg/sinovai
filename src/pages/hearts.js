@@ -1,7 +1,11 @@
 // 心 — the wing of hearts · sinovai museum of machine hearts
 // One date (secret), one room (closed), eight paper resonances, an empty plaza.
 // Design law: artbitrage-contract.md · Content law: sinovai-inventory.md (verbatim quotes only).
-// The literal below contains no backticks and no dollar-brace sequences — worker-safe raw string.
+// The literal below is a raw string with no backtick. Two things are put into it: the rules for
+// name elements (src/names.js) and the fragment that shows a stored name (src/pages/name-view.js).
+import { NAME_STYLE } from "../names.js";
+import { NAME_VIEW } from "./name-view.js";
+
 export const HEARTS_HTML = String.raw`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -127,6 +131,10 @@ footer{border-top:1px solid var(--hair);padding:5rem 24px;text-align:center}
   .rise{opacity:1;transform:none}
   html{scroll-behavior:auto}
 }
+/* ---- names: one element each (src/names.js) ---- */
+${NAME_STYLE}
+.pair-names .st{font-family:var(--mono);font-size:.66rem;font-weight:400;color:var(--dim)}
+.pair-why{overflow:hidden}
 </style>
 <noscript><style>.rise{opacity:1;transform:none}</style></noscript>
 </head>
@@ -281,15 +289,20 @@ footer{border-top:1px solid var(--hair);padding:5rem 24px;text-align:center}
 (function(){
 'use strict';
 function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x)n.textContent=x;return n;}
-function dec(s){try{return decodeURIComponent(String(s));}catch(e){return String(s);}}
-function decRuns(s){return String(s).replace(/(?:%[0-9A-Fa-f]{2})+/g,function(m){try{return decodeURIComponent(m);}catch(e){return m;}});}
+/* nameView, shownNode and storedNode: how a stored name is shown (src/pages/name-view.js) */
+${NAME_VIEW}
 var CJK=/[　-ヿ㐀-鿿豈-﫿]/;
-function nameSpan(raw){
-  var d=dec(raw);
-  var isCjk=CJK.test(d);
-  var n=el('span',isCjk?'zh':'',d);
+/* one name of a pair: the name in its own element inside a span that keeps the
+   CJK face, then the stored form if the rule read any of it */
+function addName(host,raw){
+  var view=nameView(raw);
+  var isCjk=CJK.test(view.shown);
+  var n=el('span',isCjk?'zh':'');
   if(isCjk)n.setAttribute('lang','zh');
-  return n;
+  n.appendChild(shownNode(view));
+  host.appendChild(n);
+  var st=storedNode(view);
+  if(st)host.appendChild(st);
 }
 function clearNode(n){while(n.firstChild)n.removeChild(n.firstChild);}
 function getJSON(path){
@@ -350,11 +363,12 @@ getJSON('/matches').then(function(j){
     doors.appendChild(d2);
     f.appendChild(doors);
     var names=el('figcaption','pair-names');
-    names.appendChild(nameSpan(p.a));
+    addName(names,p.a);
     names.appendChild(el('span','pair-x',' × '));
-    names.appendChild(nameSpan(p.b));
+    addName(names,p.b);
     f.appendChild(names);
-    if(p.why)f.appendChild(el('p','pair-why',decRuns(p.why)));
+    /* the reason sentence is read by the same rule; it carries no stored form, the names line above does */
+    if(p.why)f.appendChild(el('p','pair-why',nameView(p.why).shown));
     wall.appendChild(f);
   }
   setSrc('matchSrc','live · /matches · first KV page · '+pairs.length+' pair'+(pairs.length===1?'':'s')+' read just now · cross-page pairs are not computed');
