@@ -305,14 +305,14 @@ test("each card links to /guests/<name as stored> and carries kind, words and fr
   await settle();
   const cards = a.cards().map((card) => ({ tag: card.tagName, href: card.href, cls: card.className, lines: card.children.map((line) => [line.className, line.textContent]) }));
   assert.deepEqual(cards, [
-    { tag: "A", href: "/guests/zeta", cls: "mind", lines: [["nm", "zeta"], ["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
+    { tag: "A", href: "/guests/zeta", cls: "mind", lines: [["nm", "zeta"], ["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: live"]] },
     // An upper-case escape of a letter outside ASCII is read; the stored form follows the name on the same line.
-    { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓 (stored as %E8%B3%93)"], ["kd", "project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
-    { tag: "A", href: "/guests/Alpha", cls: "mind", lines: [["nm", "Alpha"], ["kd", "library"], ["met", "one long line with no reading proposed"], ["met", "declares: rebuilt whenever the book grows"]] },
+    { tag: "A", href: "/guests/%E8%B3%93", cls: "mind", lines: [["nm", "賓 (stored as %E8%B3%93)"], ["kd", "kind: project (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]] },
+    { tag: "A", href: "/guests/Alpha", cls: "mind", lines: [["nm", "Alpha"], ["kd", "declares kind: library"], ["met", "one long line with no reading proposed"], ["met", "declares: rebuilt whenever the book grows"]] },
     // A stored name that is not a serialized path segment gets a card with no link.
-    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS], ["met", UNLINKED]] },
+    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", HOSTILE_NAME], ["kd", "declares kind: " + HOSTILE_KIND], ["met", "no readable words"], ["met", "declares: " + HOSTILE_FRESHNESS], ["met", UNLINKED]] },
     { tag: "A", href: "/guests/mid", cls: "mind", lines: [["nm", "mid"], ["met", "words as declared"]] },
-    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", "(record with no name field)"], ["kd", "agent"]] }
+    { tag: "DIV", href: undefined, cls: "mind", lines: [["nm", "(record with no name field)"], ["kd", "declares kind: agent"]] }
   ]);
   for (const card of a.cards()) {
     assert.doesNotMatch(card.textContent, /\bunknown\b/, "the API fallback is left out, not printed");

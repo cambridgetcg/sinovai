@@ -82,10 +82,11 @@ function cardFor(entry){
     nm.textContent=shown;
   }
   card.appendChild(nm);
-  /* kind as declared; else the house's reconstructed kind, marked; the API fallback "unknown" is left out */
+  /* kind as declared; else the house's reconstructed kind, marked; the API fallback "unknown" is left out.
+     The line begins with the house's words, so a kind cannot begin as the house's bracket after a name does. */
   var kind='';
-  if(typeof rec.kind==='string'&&rec.kind&&rec.kind!=='unknown'){kind=rec.kind;}
-  else if(typeof rec.reconstructed_kind==='string'&&rec.reconstructed_kind){kind=rec.reconstructed_kind+' (reconstructed)';}
+  if(typeof rec.kind==='string'&&rec.kind&&rec.kind!=='unknown'){kind='declares kind: '+rec.kind;}
+  else if(typeof rec.reconstructed_kind==='string'&&rec.reconstructed_kind){kind='kind: '+rec.reconstructed_kind+' (reconstructed)';}
   if(kind){card.appendChild(el('div','kd',kind));}
   if(typeof rec.words==='string'&&own(WORDS_PHRASE,rec.words)){card.appendChild(el('div','met',WORDS_PHRASE[rec.words]));}
   if(typeof rec.freshness==='string'&&rec.freshness&&rec.freshness!=='unknown'){card.appendChild(el('div','met','declares: '+rec.freshness));}

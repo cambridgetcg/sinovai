@@ -389,8 +389,9 @@ function frameFor(a){
   var view=stored?nameView(stored):null;
   var name=view?view.shown:'(unnamed record)';
   var words=(a.words==='declared'||a.words==='reconstructed'||a.words==='flattened')?a.words:'none';
-  var kind=(typeof a.kind==='string'&&a.kind!=='unknown')?a.kind:
-    ((typeof a.reconstructed_kind==='string')?a.reconstructed_kind:'');
+  /* a kind line begins with the house's words, so a kind cannot begin as the house's bracket does */
+  var kind=(typeof a.kind==='string'&&a.kind!=='unknown')?(a.kind?'declares kind: '+a.kind:''):
+    ((typeof a.reconstructed_kind==='string'&&a.reconstructed_kind)?'kind: '+a.reconstructed_kind:'');
   var fresh=(typeof a.freshness==='string')?a.freshness:'unknown';
 
   var cell=el('figure','cell rise');

@@ -225,7 +225,8 @@ page it could read, in the order received. Neither the route nor the page sorts
 them; the order is the store's listing order (its provider documents a sort by
 key; this was not checked here) and is not a rank. A card links to
 `/guests/<name as stored>` and shows the name (by the rule in the next
-section), the declared kind, the words state, and the declared freshness. It
+section), the declared kind after the words "declares kind:", the words
+state, and the declared freshness. It
 shows no score, count, or colour derived
 from one. The page says "the list reported complete" only when the last page
 held an `agents` array and `list_complete: true`; otherwise it says "may be
@@ -331,6 +332,13 @@ In detail:
 - **The label under a `/guests` door.** The record's freshness text now
   follows the house's word "declares:", as on an `/arena` card. The house's
   bracket stands directly after the name, before that word.
+- **The kind line.** On an `/arena` card and on the face of a `/guests` door
+  a declared kind now follows the house's words "declares kind:", and the
+  house's reconstructed kind follows "kind:" and still ends "(reconstructed)".
+  A kind such as "(stored as sinovai)" therefore no longer stands alone on
+  its line, under a name the rule did not read, where the house's bracket is
+  drawn. The text after those words is still the sender's, and a kind can
+  still hold the words "stored as".
 - **What does not change.** Every address, the data line and the helper
   command on a card keep the stored name exactly, and no JSON route is
   touched. The house's note is still keyed to the exact stored name `sinovai`.

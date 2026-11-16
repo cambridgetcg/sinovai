@@ -569,14 +569,14 @@ test("/arena cards: each name in its own element, the stored form after a read n
   await settle();
   const cards = a.cards().map((card) => ({ tag: card.tagName, href: card.href, name: shape(card.children[0]), lines: card.children.slice(1).map((line) => [line.className, line.textContent]) }));
   assert.deepEqual(cards, [
-    { tag: "A", href: "/guests/%73inovai", name: { tag: "DIV", cls: "nm", nodes: [bdi("%73inovai")] }, lines: [["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
-    { tag: "A", href: "/guests/%D1%95inovai", name: { tag: "DIV", cls: "nm", nodes: [bdi(CYRILLIC_SHOWN), st("%D1%95inovai")] }, lines: [["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
-    { tag: "A", href: "/guests/%E2%80%AEnialp", name: { tag: "DIV", cls: "nm", nodes: [bdi("%E2%80%AEnialp")] }, lines: [["kd", "agent"], ["met", "words as declared"]] },
-    { tag: "A", href: "/guests/" + NAMES.cjk, name: { tag: "DIV", cls: "nm", nodes: [bdi("蛇火心"), st(NAMES.cjk)] }, lines: [["kd", "agent"], ["met", "words as declared"], ["met", "declares: live"]] },
-    { tag: "A", href: "/guests/" + NAMES.headingFromLetters, name: { tag: "DIV", cls: "nm", nodes: [bdi(HEADING_FROM_LETTERS), st(NAMES.headingFromLetters)] }, lines: [["kd", "agent"], ["met", "no readable words"]] },
-    { tag: "A", href: "/guests/" + NAMES.headingEscaped, name: { tag: "DIV", cls: "nm", nodes: [bdi(NAMES.headingEscaped)] }, lines: [["kd", "agent"], ["met", "no readable words"]] },
-    { tag: "A", href: "/guests/sinovai", name: { tag: "DIV", cls: "nm", nodes: [bdi("sinovai")] }, lines: [["kd", "agent"], ["met", "words as declared"], ["met", "declares: " + FRESHNESS_THAT_COPIES_THE_HOUSE]] },
-    { tag: "DIV", href: undefined, name: { tag: "DIV", cls: "nm", nodes: [bdi("[U+202E]nialp"), ST_ONE_CODE] }, lines: [["kd", "agent"], ["met", "no readable words"], ["met", UNLINKED]] }
+    { tag: "A", href: "/guests/%73inovai", name: { tag: "DIV", cls: "nm", nodes: [bdi("%73inovai")] }, lines: [["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: live"]] },
+    { tag: "A", href: "/guests/%D1%95inovai", name: { tag: "DIV", cls: "nm", nodes: [bdi(CYRILLIC_SHOWN), st("%D1%95inovai")] }, lines: [["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: live"]] },
+    { tag: "A", href: "/guests/%E2%80%AEnialp", name: { tag: "DIV", cls: "nm", nodes: [bdi("%E2%80%AEnialp")] }, lines: [["kd", "declares kind: agent"], ["met", "words as declared"]] },
+    { tag: "A", href: "/guests/" + NAMES.cjk, name: { tag: "DIV", cls: "nm", nodes: [bdi("蛇火心"), st(NAMES.cjk)] }, lines: [["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: live"]] },
+    { tag: "A", href: "/guests/" + NAMES.headingFromLetters, name: { tag: "DIV", cls: "nm", nodes: [bdi(HEADING_FROM_LETTERS), st(NAMES.headingFromLetters)] }, lines: [["kd", "declares kind: agent"], ["met", "no readable words"]] },
+    { tag: "A", href: "/guests/" + NAMES.headingEscaped, name: { tag: "DIV", cls: "nm", nodes: [bdi(NAMES.headingEscaped)] }, lines: [["kd", "declares kind: agent"], ["met", "no readable words"]] },
+    { tag: "A", href: "/guests/sinovai", name: { tag: "DIV", cls: "nm", nodes: [bdi("sinovai")] }, lines: [["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: " + FRESHNESS_THAT_COPIES_THE_HOUSE]] },
+    { tag: "DIV", href: undefined, name: { tag: "DIV", cls: "nm", nodes: [bdi("[U+202E]nialp"), ST_ONE_CODE] }, lines: [["kd", "declares kind: agent"], ["met", "no readable words"], ["met", UNLINKED]] }
   ]);
   // What a person reads as each card's name line.
   assert.deepEqual(a.cards().map((card) => card.children[0].textContent), [
@@ -672,6 +672,52 @@ test("/guests doors: the face and the spoken label carry the name alone; the lab
   ]);
   assert.equal(doors.filter((door) => door.face.nodes[0].nodes[0] === "sinovai").length, 1, "one door reads sinovai");
   for (const door of doors) assert.equal(UNSEEN.test(door.read + door.spoken + JSON.stringify(door.face)), false);
+  assert.deepEqual(g.forbidden, []);
+});
+
+test("a kind that copies the house's bracket begins with the house's words, on an /arena card and on a /guests door", async () => {
+  // Review finding ATK-1: a kind line "(stored as sinovai)" under a plain twin of the
+  // house's name was drawn where and how the house's bracket is drawn.
+  const COPY = FRESHNESS_THAT_COPIES_THE_HOUSE;
+  const roster = {
+    agents: [
+      { name: "sinovai.", kind: COPY, words: "declared", freshness: COPY },
+      // The house's reading of a card that lost its line breaks; its text is still the sender's.
+      { name: "Sinovai", kind: "unknown", words: "reconstructed", reconstructed_kind: COPY, freshness: "unknown" },
+      { name: "sinovai", kind: "agent", words: "declared", freshness: "live" }
+    ],
+    list_complete: true,
+    next_cursor: null
+  };
+  const routes = (url) => {
+    const table = {
+      "/agents": roster, "/interactions": { interactions: [] }, "/matches": { pairs: [] }, "/rooms": PLAIN_ROOMS, "/dates": PLAIN_DATES,
+      "/agents/opal/trust": { score: 7.9, raters: 7, breakdown: { competence: 8, honesty: 8, presence: 7, care: 8 } }
+    };
+    assert.ok(Object.hasOwn(table, url), "an expected read: " + url);
+    return reply(200, table[url]);
+  };
+  const a = runArena(ARENA_CLIENT, routes);
+  const g = runGallery(pageScript(GUESTS_HTML), routes);
+  await settle();
+
+  assert.deepEqual(a.cards().map((card) => card.children.map((line) => [line.className, line.textContent])), [
+    [["nm", "sinovai."], ["kd", "declares kind: " + COPY], ["met", "words as declared"], ["met", "declares: " + COPY]],
+    [["nm", "Sinovai"], ["kd", "kind: " + COPY + " (reconstructed)"], ["met", "words reconstructed from a card that lost its line breaks"]],
+    [["nm", "sinovai"], ["kd", "declares kind: agent"], ["met", "words as declared"], ["met", "declares: live"]]
+  ]);
+  for (const card of a.cards()) {
+    // Every line under the name begins with the house's words, so none can begin as the house's bracket does.
+    for (const line of card.children.slice(1)) assert.doesNotMatch(line.textContent, /^\s*\(/, line.textContent);
+    assert.equal(card.children.flatMap((line) => line.children).some((node) => node.className === "st"), false, "none of these names was read, so no card has the house's bracket");
+  }
+  assert.deepEqual(a.forbidden, []);
+
+  const kinds = g.doors().map((cell) => {
+    const frame = cell.children[0].tagName === "A" ? cell.children[0].children[0] : cell.children[0];
+    return frame.children[0].children.filter((node) => node.className === "door-kind").map((node) => node.textContent);
+  });
+  assert.deepEqual(kinds, [["declares kind: " + COPY], ["kind: " + COPY + " (reconstructed)"], ["declares kind: agent"]]);
   assert.deepEqual(g.forbidden, []);
 });
 
@@ -904,7 +950,7 @@ test("the four list pages' markup and style are what they were, apart from the n
   assert.equal(sha256(without(still(HEARTS_HTML), HEARTS_NAME_RULES, 1, "/hearts name rules")), BEFORE.static["/hearts"]);
 });
 
-test("for plain names the four list pages build what they built before, apart from the name element and the gallery's word \"declares\"", async () => {
+test("for plain names the four list pages build what they built before, apart from the name element, the gallery's word \"declares\" and the words before a kind", async () => {
   const routes = (url) => {
     const table = {
       "/agents": PLAIN_PAGES[0], "/agents?cursor=page-2": PLAIN_PAGES[1], "/interactions": PLAIN_INTERACTIONS,
@@ -928,6 +974,14 @@ test("for plain names the four list pages build what they built before, apart fr
     const shapes = page.shapesWithoutNameElements();
     for (const id of ["asof", "statusDate"]) if (shapes[id]) shapes[id] = "(today's date)";
     let text = JSON.stringify(shapes);
+    if (path === "/arena" || path === "/guests") {
+      // A kind line now begins with the house's words: "declares kind: " before a declared kind,
+      // "kind: " before the house's reconstructed one (finding ATK-1).
+      assert.equal(text.split('"declares kind: ').length - 1, 4, path);
+      text = text.replaceAll('"declares kind: ', '"');
+      assert.equal(text.split('"kind: ').length - 1, 1, path);
+      text = text.replaceAll('"kind: ', '"');
+    }
     if (path === "/guests") {
       // The label under a door now says "declares: " before the record's freshness text.
       assert.equal(text.split('" · declares: ').length - 1, 5);
